@@ -1,0 +1,18 @@
+{
+  "/[section]/page": "/[section]",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/api/cron/dividends/full/route": "/api/cron/dividends/full",
+  "/api/cron/dividends/incremental/route": "/api/cron/dividends/incremental",
+  "/api/developer/sync/run/route": "/api/developer/sync/run",
+  "/api/developer/sync/status/route": "/api/developer/sync/status",
+  "/api/owner/data/route": "/api/owner/data",
+  "/api/owner/session/route": "/api/owner/session",
+  "/company-analysis/[symbol]/page": "/company-analysis/[symbol]",
+  "/developer/companies/page": "/developer/companies",
+  "/developer/dividends/page": "/developer/dividends",
+  "/developer/login/page": "/developer/login",
+  "/developer/page": "/developer",
+  "/favicon.ico/route": "/favicon.ico",
+  "/page": "/"
+}
