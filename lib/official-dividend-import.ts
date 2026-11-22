@@ -219,7 +219,7 @@ export function parseOfficialDividendCsv(
   }
 
   if (!latestBySymbol.size) {
-    throw new Error(`No dividend records within the last 12 months were found in this ${exchange} export.`);
+    throw new Error(`No dividend records within the import window (12 months past to 12 months future) were found in this ${exchange} export.`);
   }
 
   return { companies: [...latestBySymbol.values()], skippedRows, duplicateRows };
