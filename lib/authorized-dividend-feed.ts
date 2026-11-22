@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPrisma } from "@/lib/prisma";
+import { RetryableSyncError } from "@/lib/retryable-sync-error";
 import type { DividendSourceAdapter, DividendSourceRecord } from "@/lib/dividend-sync";
 
 type FeedRow = {
@@ -101,7 +102,7 @@ export function getAuthorizedDividendFeedAdapter(): DividendSourceAdapter | null
         clearTimeout(timeout);
       }
       if (response.status === 429 || response.status >= 500) {
-        throw new Error("The configured dividend provider is temporarily unavailable.");
+        throw new RetryableSyncError();
       }
       if (!response.ok) throw new Error(`Dividend feed returned HTTP ${response.status}.`);
       const body = await response.text();
@@ -193,7 +194,7 @@ export function getAuthorizedDividendFeedAdapter(): DividendSourceAdapter | null
           verificationStatus: verificationStatus(raw.status),
         });
       }
-      return { companiesChecked: companies.length, records };
+      return { companiesChecked: companyByKey.size, records };
     },
   };
 }
