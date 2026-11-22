@@ -41,7 +41,7 @@ const navigation: { key: SectionKey; label: string; icon: typeof LayoutDashboard
   { key: "dividend-screener", label: "Dividend Screener", icon: ListFilter, group: "Research" },
   { key: "all-companies", label: "All Companies", icon: Building2, group: "Research" },
   { key: "company-analysis", label: "Company Analysis", icon: LineChart, group: "Research" },
-  { key: "manual-dividends", label: "Manual Updates", icon: Pencil, group: "Research" },
+  { key: "manual-dividends", label: "Manual Dividends", icon: Pencil, group: "Manual Data" },
   { key: "dividend-calculator", label: "Dividend Calculator", icon: Calculator, group: "Tools" },
   { key: "compare-companies", label: "Compare Companies", icon: GitCompareArrows, group: "Tools" },
   { key: "my-portfolio", label: "My Portfolio", icon: Wallet, group: "My workspace" },
@@ -207,7 +207,7 @@ function useLocalValue<T>(key: string, fallback: T): [T, (value: T) => void] {
   }, [key]);
   return [value, setValue];
 }
-const groupNames = ["Overview", "Research", "Tools", "My workspace", "Preferences"];
+const groupNames = ["Overview", "Research", "Manual Data", "Tools", "My workspace", "Preferences"];
 
 function Logo() {
   return <div className="brand-lockup">
@@ -385,6 +385,9 @@ function Dashboard({ profile }: { profile: Profile }) {
     .map(({ company }) => company);
   return <><PageHeading eyebrow={eyebrow} title={`${greeting}, ${firstName}`} description="Your dividend intelligence, all in one place." action={<button className="button button-secondary" onClick={() => downloadCsv("dnx-overview-demo.csv", ["Market index", "Sample value", "Change"], marketIndices.map((item) => [item.name, item.value, item.change]))}><Download size={15} /> Export overview</button>} />
     <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div><b>Illustrative dashboard</b><span> Market prices and historical charts are sample data. Dividend records may be source-labelled exchange CSV imports or unverified manual entries; check the company page for details.</span></div><DemoTag /></div>
+    <Panel title="Manual Dividends" subtitle="A separate public area for dividend information entered by the DNX team." action={<Link className="panel-link" href="/manual-dividends">Open manual dividends <ArrowUpRight size={13} /></Link>}>
+      <div className="announcement-item"><div className="announcement-icon amber"><Pencil size={16} /></div><div className="announcement-copy"><b>Manually maintained dividend records</b><span>View dividend per share, announcement date, ex-date, record date, payment date and provided source links.</span><small>Manual entries are clearly labelled and should be verified with the company or exchange.</small></div><Link className="panel-link" href="/manual-dividends">View records <ArrowUpRight size={13} /></Link></div>
+    </Panel>
     <div className="section-title-row"><div><h2>Market overview</h2><p>Indian indices at a glance</p></div><div className="market-status"><span />Indicative session <b>{marketIsOpen ? "Open" : "Closed"}</b><span className="divider">·</span><span className="market-time">Weekdays 09:15–15:30 IST · DEMO</span></div></div>
     <div className="market-grid">{marketIndices.map((index) => <MarketCard key={index.name} index={index} />)}</div>
     <div className="section-title-row stats-title"><div><h2>Dividend snapshot</h2><p>Upcoming opportunities in your watchlist universe</p></div><Link className="text-link" href="/dividend-screener">View screener <ArrowUpRight size={14} /></Link></div>
