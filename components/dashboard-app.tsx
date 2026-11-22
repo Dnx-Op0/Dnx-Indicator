@@ -32,13 +32,14 @@ const CompaniesContext = createContext<{ companies: DividendCompany[]; setCompan
 });
 const useCompanies = () => useContext(CompaniesContext).companies;
 type SectionKey =
-  | "dashboard" | "dividend-calendar" | "dividend-screener" | "all-companies"
+  | "dashboard" | "dividend-calendar" | "manual-dividends" | "dividend-screener" | "all-companies"
   | "company-analysis" | "dividend-calculator" | "compare-companies" | "my-portfolio"
   | "watchlist" | "corporate-actions" | "reports" | "settings" | "owner";
 
 const navigation: { key: SectionKey; label: string; icon: typeof LayoutDashboard; group: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Overview" },
   { key: "dividend-calendar", label: "Dividend Calendar", icon: CalendarDays, group: "Research" },
+  { key: "manual-dividends", label: "Manual Dividends", icon: Pencil, group: "Research" },
   { key: "dividend-screener", label: "Dividend Screener", icon: ListFilter, group: "Research" },
   { key: "all-companies", label: "All Companies", icon: Building2, group: "Research" },
   { key: "company-analysis", label: "Company Analysis", icon: LineChart, group: "Research" },
@@ -310,6 +311,7 @@ function Routes(props: {
   switch (props.section) {
     case "dashboard": return <Dashboard profile={props.profile} />;
     case "dividend-calendar": return <CalendarPage />;
+    case "manual-dividends": return <ManualDividendsPage />;
     case "dividend-screener": return <CompaniesPage screener />;
     case "all-companies": return <CompaniesPage />;
     case "company-analysis": return <AnalysisPage symbol={props.selectedSymbol} />;
@@ -490,6 +492,18 @@ function CalendarPage() {
     <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>Events can be bundled demo data, exchange CSV imports, or manual entries. Manual entries are not independently verified; confirm every record against the linked official disclosure.</div><span className="status-pill">SOURCES LABELLED</span></div>
     <div className="calendar-page-layout"><Panel title="Monthly calendar" subtitle="Dividend events from all available sources" action={<button className="button button-secondary button-small" onClick={() => downloadCsv("dnx-calendar-entries.csv", ["Company", "Exchange symbol", "Dividend per share", "Announcement date", "Ex-date", "Record date", "Payment date"], availableCompanies.map((company) => [company.name, companyExchangeSymbol(company), company.dividend, company.announcement, company.exDate, company.recordDate, company.paymentDate]))}><Download size={13} /> Export</button>} className="large-calendar-panel"><div className="calendar-month calendar-month-large"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">ALL SOURCES</span></div><span><button className="icon-button" aria-label="Previous month" onClick={() => setSelectedMonth(moveMonth(viewKey, -1))}><ChevronLeft size={17} /></button><button className="icon-button" aria-label="Next month" onClick={() => setSelectedMonth(moveMonth(viewKey, 1))}><ChevronRight size={17} /></button></span></div><div className="calendar-grid calendar-weekdays">{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid calendar-grid-large">{Array.from({ length: firstDay }, (_, i) => <div key={`blank-${i}`} className="large-calendar-day muted" />)}{Array.from({ length: daysInMonth }, (_, i) => { const day = i + 1; const company = eventsByDay.get(day); return <div key={day} className={`large-calendar-day${company ? " event-day" : ""}${day === todayDate && viewKey === todayKey.slice(0, 7) ? " today" : ""}`}><span>{day}</span>{company && <small>{company.name}<CompanyDataSource company={company} subtle /></small>}</div>; })}</div><div className="calendar-legend"><span><i />Dividend event</span><span>{monthEvents.length} entries · all sources</span></div></Panel>
       <Panel title="Upcoming events" subtitle={`${viewDate.toLocaleString("en-US", { month: "long" })} · all available sources`}><div className="event-list">{monthEvents.length ? monthEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).map(({ company, date }) => <div className="event-item" key={company.symbol}><div className="event-date"><b>{String(date.getDate()).padStart(2, "0")}</b><span>{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div><div><Link href={`/company-analysis/${company.symbol}`}><b>{company.name}</b></Link><small>{companyExchangeSymbol(company)} · {company.type} dividend</small></div><strong>{currency(company.dividend)}</strong></div>) : <div className="table-empty">No dividend events for this month.</div>}</div></Panel></div></>;
+}
+
+function ManualDividendsPage() {
+  const entries = useCompanies().filter((company) => Boolean(company.manualUpdateAt))
+    .sort((a, b) => Date.parse(b.manualUpdateAt ?? "") - Date.parse(a.manualUpdateAt ?? ""));
+  return <><PageHeading eyebrow="OWNER-SUBMITTED DATA" title="Manual dividends" description="Dividend records entered manually and published separately for clients." action={<span className="manual-update-badge">MANUAL DATA</span>} />
+    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div><b>Manually entered information</b><span> These records are provided by the site owner. DNX has not independently verified them against NSE/BSE disclosures. Please confirm important dates and amounts with the linked company announcement.</span></div></div>
+    <div className="metric-grid"><MetricCard label="Manual records" value={String(entries.length).padStart(2,"0")} note="Published in this compartment" icon={ClipboardList} tone="blue" /><MetricCard label="Companies covered" value={String(new Set(entries.map((item) => item.symbol)).size).padStart(2,"0")} note="Unique listed companies" icon={Building2} tone="purple" /></div>
+    <Panel title="Manually published dividend records" subtitle={`${entries.length} records · newest manual update first`} action={<button className="button button-secondary button-small" disabled={!entries.length} onClick={() => downloadCsv("dnx-manual-dividends.csv", ["Company","Symbol","Sector","Type","Dividend per share (INR)","Announcement date","Ex-date","Record date","Payment date","Manual update date","Source URL"], entries.map((company) => [company.name,company.symbol,company.sector,company.type,company.dividend,company.announcement,company.exDate,company.recordDate,company.paymentDate,company.manualUpdateAt,company.manualSourceUrl ?? ""]))}><Download size={13} /> Export CSV</button>}>
+      {entries.length ? <div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Dividend type</th><th>Dividend / share</th><th>Announcement</th><th>Ex-date</th><th>Record date</th><th>Payment date</th><th>Updated</th><th>Source</th></tr></thead><tbody>{entries.map((company) => <tr key={company.symbol}><td><Link href={`/company-analysis/${company.symbol}`}><b>{company.name}</b></Link><small>{companyExchangeSymbol(company)} · {company.sector}</small></td><td>{company.type}</td><td>{currency(company.dividend)}</td><td>{company.announcement || "—"}</td><td>{company.exDate || "—"}</td><td>{company.recordDate || "—"}</td><td>{company.paymentDate || "—"}</td><td>{formatManualUpdateDate(company.manualUpdateAt ?? "")}</td><td><span className="manual-update-badge">MANUAL</span>{company.manualSourceUrl && <><br/><a href={company.manualSourceUrl} target="_blank" rel="noopener noreferrer">View source</a></>}</td></tr>)}</tbody></table></div> : <div className="table-empty manual-empty"><b>No manual dividend records published yet.</b><span>Sign in to the Owner console, edit a company and enable “Publish in Manual Dividends compartment”. The record will appear here for clients.</span></div>}
+    </Panel>
+  </>;
 }
 
 function CompaniesPage({ screener = false }: { screener?: boolean }) {
@@ -716,7 +730,11 @@ function OwnerPage() {
     setBusy(true);
     setError("");
     setNotice("");
-    const updated = availableCompanies.map((company) => company.symbol === draft.symbol ? draft : company);
+    const updated = availableCompanies.map((company) => company.symbol === draft.symbol ? {
+      ...draft,
+      manualUpdateAt: draft.manualUpdateAt ? (company.manualUpdateAt || new Date().toISOString()) : undefined,
+      manualSourceUrl: draft.manualUpdateAt ? (draft.manualSourceUrl?.trim() || undefined) : undefined,
+    } : company);
     try {
       const response = await fetch("/api/owner/data", {
         method: "PUT",
@@ -775,6 +793,8 @@ function OwnerPage() {
         <label>Ex-date<input type="date" required value={dateToInput(draft.exDate)} onChange={(event) => setDraft({ ...draft, exDate: dateFromInput(event.target.value) })} /></label>
         <label>Record date<input type="date" required value={dateToInput(draft.recordDate)} onChange={(event) => setDraft({ ...draft, recordDate: dateFromInput(event.target.value) })} /></label>
         <label>Payment date<input type="date" required value={dateToInput(draft.paymentDate)} onChange={(event) => setDraft({ ...draft, paymentDate: dateFromInput(event.target.value) })} /></label>
+        <label className="owner-manual-toggle"><input type="checkbox" checked={Boolean(draft.manualUpdateAt)} onChange={(event) => setDraft({ ...draft, manualUpdateAt: event.target.checked ? (draft.manualUpdateAt || new Date().toISOString()) : undefined, manualSourceUrl: event.target.checked ? draft.manualSourceUrl : undefined })} /><span><b>Publish in Manual Dividends compartment</b><small>Clearly marks this record as manually entered and not exchange-verified.</small></span></label>
+        {draft.manualUpdateAt && <label className="owner-source-field">Source URL (optional)<input type="url" placeholder="https://company.com/investors/..." value={draft.manualSourceUrl ?? ""} onChange={(event) => setDraft({ ...draft, manualSourceUrl: event.target.value })} /></label>}
         <div className="owner-edit-actions"><button className="button button-secondary" type="button" onClick={() => setDraft(null)}>Cancel</button><button className="button button-primary" type="submit" disabled={busy}>{busy ? "Saving…" : "Save and publish"} <Check size={14} /></button></div>
       </form>
     </Panel>}
