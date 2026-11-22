@@ -4,7 +4,6 @@ import type { Prisma } from "@/lib/generated/prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { getAuthorizedDividendFeedAdapter } from "@/lib/authorized-dividend-feed";
 import { RetryableSyncError } from "@/lib/retryable-sync-error";
-export { RetryableSyncError } from "@/lib/retryable-sync-error";
 
 const MAX_ATTEMPTS = 3;
 
