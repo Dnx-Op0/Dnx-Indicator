@@ -264,20 +264,51 @@ On the Vercel Hobby plan, the configured full synchronization schedule runs once
 
 More frequent scheduled checks require a suitable paid Vercel plan.
 
-### Current Synchronization Status
+### Connect an Authorized Dividend Feed
 
-**The synchronization system is currently a foundation, not an active financial-data service.**
+The automatic synchronization adapter is implemented. It reads an authorized provider's JSON endpoint, matches NSE symbols and BSE scrip codes, creates missing company mappings, detects duplicate records, stores source references, and records changes in dividend revision history.
 
-No authorized NSE, BSE, company, or licensed-provider data feed is currently connected.
+Configure these server-side Vercel environment variables (or local `.env.local`):
 
-Until an approved provider and its API credentials are configured:
+```env
+DATABASE_URL=your_postgresql_connection_string
+CRON_SECRET=your_random_cron_secret
+DNX_DIVIDEND_FEED_URL=https://your-authorized-provider.example/api/dividends
+DNX_DIVIDEND_FEED_TOKEN=your_provider_api_token
+DNX_DIVIDEND_FEED_NAME=YOUR_PROVIDER_NAME
+```
 
-- Synchronization runs remain `UNCONFIGURED`.
-- Missing PostgreSQL configuration can return HTTP 503.
-- No synchronization is reported as successful without a source response.
-- Public financial figures remain illustrative demo data.
+The provider endpoint must return JSON in this shape:
 
-The connector is deliberately disabled until an authorized data source is approved.
+```json
+{
+  "records": [
+    {
+      "id": "provider-record-id",
+      "exchange": "NSE",
+      "symbol": "RELIANCE",
+      "companyName": "Reliance Industries Limited",
+      "amountPerShare": 6,
+      "percentage": 60,
+      "dividendType": "Interim",
+      "financialYear": "2026-27",
+      "announcementDate": "2026-10-20",
+      "publishedAt": "2026-10-20T10:00:00+05:30",
+      "exDate": "2026-11-05",
+      "recordDate": "2026-11-06",
+      "paymentDate": null,
+      "status": "ANNOUNCED",
+      "announcementUrl": "https://provider.example/announcement/123"
+    }
+  ]
+}
+```
+
+Required fields are `exchange`, `symbol`, `amountPerShare`, and `announcementDate` (or `publishedAt`). Supported exchanges are NSE and BSE. Dates may be null when the provider has not announced them. The endpoint is called with a `mode=full` or `mode=incremental` query parameter and an optional Bearer token.
+
+**Important:** The adapter does not scrape undocumented exchange endpoints or bypass data licensing. Obtain the endpoint and usage rights from your selected exchange or licensed provider. Keep all provider credentials in server-side environment variables; never put them in browser code or commit them to GitHub.
+
+Until these variables and the PostgreSQL migration are configured, synchronization correctly reports `UNCONFIGURED`. The current public demo calendar remains separate from the PostgreSQL ingestion store; it must be connected to a reviewed publication workflow before database-imported records appear in the public calendar.
 
 ---
 
