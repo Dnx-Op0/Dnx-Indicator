@@ -64,23 +64,6 @@ function formatSyncDate(value: string | null) {
   }).format(new Date(value))} IST`;
 }
 
-function downloadDeveloperBackup(companies: DividendCompany[]) {
-  const payload = {
-    product: "DNX INDICATES",
-    exportedAt: new Date().toISOString(),
-    timezone: "Asia/Kolkata",
-    schemaVersion: 1,
-    companies,
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `dnx-indicates-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
 function preserveYieldSourceWhenUnchanged(updated: DividendCompany, previous: DividendCompany) {
   if (updated.yield === previous.yield) return updated;
   const withoutYieldSource = { ...updated };
@@ -120,7 +103,6 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
   const [importPreview, setImportPreview] = useState<OfficialDividendImport | null>(null);
   const [importFileName, setImportFileName] = useState("");
   const [importBusy, setImportBusy] = useState(false);
-  const [dataRefreshing, setDataRefreshing] = useState(false);
 
   useEffect(() => {
     document.documentElement.dataset.theme = "dark";
@@ -166,23 +148,6 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
     };
   }, []);
 
-  async function refreshDeveloperData() {
-    setDataRefreshing(true);
-    setError("");
-    setNotice("");
-    try {
-      const response = await fetch("/api/owner/data", { cache: "no-store" });
-      const result = await response.json() as { companies?: DividendCompany[]; storage?: CompanyStorageStatus; error?: string };
-      if (!response.ok || !result.companies || !result.storage) throw new Error(result.error ?? "Could not refresh the company dataset.");
-      setCompanies(result.companies);
-      setStorage(result.storage);
-      setNotice("Developer data refreshed from persistent storage.");
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not refresh developer data.");
-    } finally {
-      setDataRefreshing(false);
-    }
-  }
 
   async function runSyncNow() {
     setSyncBusy(true);
@@ -366,13 +331,6 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
   );
   const visibleMatchingCompanies = matchingCompanies.slice(0, 100);
   const manualDividendCount = companies.filter((company) => company.manualUpdateAt).length;
-  const importedListingCount = companies.filter((company) => company.sourceExchange).length;
-  const importedEventCount = companies.reduce((total, company) => total + (company.calendarEvents?.length ?? (company.sourceExchange ? 1 : 0)), 0);
-  const indiaToday = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-  const upcomingManualCount = companies.filter((company) => company.manualUpdateAt && dateToInput(company.exDate) >= indiaToday).length;
-  const missingManualSourceCount = companies.filter((company) => company.manualUpdateAt && !company.manualSourceUrl?.trim()).length;
-  const staleImportCount = companies.filter((company) => company.sourceExchange && company.sourceUpdatedAt
-    && Date.now() - Date.parse(company.sourceUpdatedAt) > 14 * 24 * 60 * 60 * 1000).length;
 
   return <div className="developer-layout">
     <aside className="developer-sidebar">
@@ -401,20 +359,6 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
             <DeveloperMetric icon={Database} label="Sync database" value={syncLoading ? "…" : syncStatus?.databaseConfigured ? "Connected" : "Not configured"} note="PostgreSQL connection required" />
             <DeveloperMetric icon={Zap} label="Authorized source" value={syncLoading ? "…" : syncStatus?.sourceConfigured ? "Connected" : "Not configured"} note="No financial source is queried" />
           </div>
-          <section className="developer-panel developer-data-health">
-            <div className="developer-panel-heading"><div><span className="eyebrow">DATA CONTROL CENTER</span><h2>Dataset health &amp; backup</h2><p>Quick checks for the records currently stored in your developer workspace.</p></div><Database size={19} /></div>
-            <div className="developer-health-grid">
-              <div><span>Exchange listings</span><b>{loading ? "…" : importedListingCount}</b><small>Imported from NSE/BSE CSV</small></div>
-              <div><span>Dividend events retained</span><b>{loading ? "…" : importedEventCount}</b><small>Includes repeated company events</small></div>
-              <div><span>Manual entries</span><b>{loading ? "…" : manualDividendCount}</b><small>{upcomingManualCount} with upcoming ex-dates</small></div>
-              <div><span>Review needed</span><b className={staleImportCount || missingManualSourceCount ? "sync-warn" : "sync-good"}>{loading ? "…" : staleImportCount + missingManualSourceCount}</b><small>{staleImportCount} old imports · {missingManualSourceCount} manual entries without source URL</small></div>
-            </div>
-            <div className="developer-health-actions">
-              <button className="button button-secondary button-small" onClick={() => void refreshDeveloperData()} disabled={dataRefreshing || loading}><RefreshCw size={13} className={dataRefreshing ? "developer-spin" : ""} />{dataRefreshing ? "Refreshing…" : "Refresh saved data"}</button>
-              <button className="button button-secondary button-small" onClick={() => downloadDeveloperBackup(companies)} disabled={loading || !companies.length}><Download size={13} /> Download JSON backup</button>
-              <span>Backups include manual edits and every retained imported event.</span>
-            </div>
-          </section>
           <section className="developer-panel developer-sync-panel">
             <div className="developer-panel-heading">
               <div><span className="eyebrow">AUTOMATIC DIVIDEND INTELLIGENCE</span><h2>Scheduled synchronization</h2><p>Free Vercel Hobby hosting permits one scheduled run per day. The full-sync job is scheduled for 16:00 IST; intraday 30-minute checks require a paid plan.</p></div>
