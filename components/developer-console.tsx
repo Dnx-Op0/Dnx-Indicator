@@ -89,6 +89,7 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
   const [companySearch, setCompanySearch] = useState("");
   const [draft, setDraft] = useState<DividendCompany | null>(null);
   const [dividendDraft, setDividendDraft] = useState<DividendCompany | null>(null);
+  const [isNewCalendarEntry, setIsNewCalendarEntry] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -215,7 +216,8 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
       manualUpdateAt: new Date().toISOString(),
       manualSourceUrl: dividendDraft.manualSourceUrl?.trim() || undefined,
     }, previous);
-    const updated = companies.map((company) => company.symbol === updatedDividend.symbol ? updatedDividend : company);
+    const exists = companies.some((company) => company.symbol === updatedDividend.symbol);
+    const updated = exists ? companies.map((company) => company.symbol === updatedDividend.symbol ? updatedDividend : company) : [...companies, updatedDividend];
     try {
       const response = await fetch("/api/owner/data", {
         method: "PUT",
@@ -227,7 +229,8 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
       setCompanies(result.companies);
       if (result.storage) setStorage(result.storage);
       setDividendDraft(null);
-      setNotice(`${updatedDividend.name} dividend update saved and published. It is manually entered and not independently verified.`);
+      setIsNewCalendarEntry(false);
+      setNotice(`${updatedDividend.name} calendar entry ${exists ? "updated" : "added"} and published. It is manually entered and not independently verified.`);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Dividend changes could not be saved.");
     } finally {
@@ -398,7 +401,7 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
           <div className="developer-disclaimer"><ShieldCheck size={16} /><span>This editor changes only the sample dataset. Public pages continue to mark these values DEMO DATA.</span></div>
         </> : <>
           <section className="developer-panel">
-            <div className="developer-panel-heading"><div><span className="eyebrow">DIVIDEND DATASET</span><h2>Latest dividend records</h2><p>{loading ? "Loading dividend records…" : `${companies.length} companies · changes publish to public dividend views`}</p></div><span className="developer-storage-pill"><Database size={13} />{storage?.mode === "vercel-blob" ? "Private cloud storage" : storage?.mode === "local-file" ? "Local file storage" : storage?.mode === "demo-read-only" ? "Read-only demo" : "Checking storage…"}</span></div>
+            <div className="developer-panel-heading"><div><span className="eyebrow">DIVIDEND DATASET</span><h2>Calendar &amp; dividend records</h2><p>{loading ? "Loading dividend records…" : `${companies.length} records · edits publish to the public dividend calendar`}</p></div><button className="button button-primary button-small" type="button" disabled={!storage?.editable || busy || loading} onClick={() => { setIsNewCalendarEntry(true); setDividendDraft({ name: "", symbol: "", sector: "Other", marketCap: null, yield: null, dividend: null, type: "Interim", announcement: "", exDate: "", recordDate: "", paymentDate: "", payout: null }); setError(""); setNotice(""); }}><CalendarDays size={13} /> Add calendar entry</button><span className="developer-storage-pill"><Database size={13} />{storage?.mode === "vercel-blob" ? "Private cloud storage" : storage?.mode === "local-file" ? "Local file storage" : storage?.mode === "demo-read-only" ? "Read-only demo" : "Checking storage…"}</span></div>
             {storage?.mode === "demo-read-only" && <div className="developer-storage-notice" role="note"><CircleAlert size={15} /><span>Persistent storage is not configured. Dividend editing is disabled to prevent lost changes.</span></div>}
             <div className="developer-sync-notice"><ShieldCheck size={15} /><span>Official CSV imports preserve unknown metrics as unavailable. Imported announcements are attributed to NSE/BSE; no undocumented feed is queried.</span></div>
             <div className="developer-list-toolbar">
@@ -422,18 +425,19 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
               </div>}
             </section>
             {dividendDraft && storage?.editable && <section className="developer-inline-editor">
-              <div className="developer-panel-heading"><div><span className="eyebrow">MANUAL DIVIDEND UPDATE</span><h2>{dividendDraft.name}</h2><p>{dividendDraft.symbol} · enter the latest announced dividend details</p></div><button className="developer-icon-button" aria-label="Close dividend editor" onClick={() => setDividendDraft(null)}><X size={15} /></button></div>
+              <div className="developer-panel-heading"><div><span className="eyebrow">{isNewCalendarEntry ? "NEW MANUAL CALENDAR ENTRY" : "MANUAL DIVIDEND UPDATE"}</span><h2>{isNewCalendarEntry ? "Add dividend event" : dividendDraft.name}</h2><p>{isNewCalendarEntry ? "Create a calendar entry that will appear on the public calendar after saving." : `${dividendDraft.symbol} · edit the dividend details and dates`}</p></div><button className="developer-icon-button" aria-label="Close dividend editor" onClick={() => { setDividendDraft(null); setIsNewCalendarEntry(false); }}><X size={15} /></button></div>
               <form className="developer-edit-form" onSubmit={saveDividendUpdate}>
+                {isNewCalendarEntry && <><label>Company name<input required value={dividendDraft.name} onChange={(event) => setDividendDraft({ ...dividendDraft, name: event.target.value })} placeholder="Company name" /></label><label>Unique symbol<input required pattern="[A-Za-z0-9._-]+" value={dividendDraft.symbol} onChange={(event) => setDividendDraft({ ...dividendDraft, symbol: event.target.value.toUpperCase().replace(/[^A-Z0-9._-]/g, "") })} placeholder="e.g. ABC" /></label></>}
                 <label>Dividend per share (₹)<input type="number" min="0" step="any" required={!dividendDraft.sourceExchange} value={dividendDraft.dividend ?? ""} onChange={(event) => setDividendDraft({ ...dividendDraft, dividend: event.target.value === "" ? null : Number(event.target.value) })} /></label>
-                <label>Dividend yield (%)<input type="number" min="0" step="any" required={!dividendDraft.sourceExchange} value={dividendDraft.yield ?? ""} onChange={(event) => setDividendDraft({ ...dividendDraft, yield: event.target.value === "" ? null : Number(event.target.value) })} /></label>
-                <label>Payout ratio (%)<input type="number" min="0" step="any" required={!dividendDraft.sourceExchange} value={dividendDraft.payout ?? ""} onChange={(event) => setDividendDraft({ ...dividendDraft, payout: event.target.value === "" ? null : Number(event.target.value) })} /></label>
+                <label>Dividend yield (%)<input type="number" min="0" step="any" required={!dividendDraft.sourceExchange && !isNewCalendarEntry} value={dividendDraft.yield ?? ""} onChange={(event) => setDividendDraft({ ...dividendDraft, yield: event.target.value === "" ? null : Number(event.target.value) })} /></label>
+                <label>Payout ratio (%)<input type="number" min="0" step="any" required={!dividendDraft.sourceExchange && !isNewCalendarEntry} value={dividendDraft.payout ?? ""} onChange={(event) => setDividendDraft({ ...dividendDraft, payout: event.target.value === "" ? null : Number(event.target.value) })} /></label>
                 <label>Dividend type<select value={dividendDraft.type} onChange={(event) => setDividendDraft({ ...dividendDraft, type: event.target.value as DividendCompany["type"] })}><option>Interim</option><option>Final</option><option>Special</option><option>Dividend</option></select></label>
-                <label>Announcement date<input type="date" required={!dividendDraft.sourceExchange || Boolean(dividendDraft.announcement)} value={dateToInput(dividendDraft.announcement)} onChange={(event) => setDividendDraft({ ...dividendDraft, announcement: event.target.value })} /></label>
+                <label>Announcement date<input type="date" required={(!dividendDraft.sourceExchange && !isNewCalendarEntry) || Boolean(dividendDraft.announcement)} value={dateToInput(dividendDraft.announcement)} onChange={(event) => setDividendDraft({ ...dividendDraft, announcement: event.target.value })} /></label>
                 <label>Ex-date<input type="date" required value={dateToInput(dividendDraft.exDate)} onChange={(event) => setDividendDraft({ ...dividendDraft, exDate: event.target.value })} /></label>
-                <label>Record date<input type="date" required={!dividendDraft.sourceExchange || Boolean(dividendDraft.recordDate)} value={dateToInput(dividendDraft.recordDate)} onChange={(event) => setDividendDraft({ ...dividendDraft, recordDate: event.target.value })} /></label>
-                <label>Payment date<input type="date" required={!dividendDraft.sourceExchange || Boolean(dividendDraft.paymentDate)} value={dateToInput(dividendDraft.paymentDate)} onChange={(event) => setDividendDraft({ ...dividendDraft, paymentDate: event.target.value })} /></label>
+                <label>Record date<input type="date" required={(!dividendDraft.sourceExchange && !isNewCalendarEntry) || Boolean(dividendDraft.recordDate)} value={dateToInput(dividendDraft.recordDate)} onChange={(event) => setDividendDraft({ ...dividendDraft, recordDate: event.target.value })} /></label>
+                <label>Payment date<input type="date" required={(!dividendDraft.sourceExchange && !isNewCalendarEntry) || Boolean(dividendDraft.paymentDate)} value={dateToInput(dividendDraft.paymentDate)} onChange={(event) => setDividendDraft({ ...dividendDraft, paymentDate: event.target.value })} /></label>
                 <label>Source URL (optional)<input type="url" placeholder="https://…" value={dividendDraft.manualSourceUrl ?? ""} onChange={(event) => setDividendDraft({ ...dividendDraft, manualSourceUrl: event.target.value })} /></label>
-                <div className="developer-edit-actions"><button className="button button-secondary" type="button" onClick={() => setDividendDraft(null)}>Cancel</button><button className="button button-primary" type="submit" disabled={busy || !storage?.editable}>{busy ? "Publishing…" : "Save dividend update"} <Check size={14} /></button></div>
+                <div className="developer-edit-actions"><button className="button button-secondary" type="button" onClick={() => { setDividendDraft(null); setIsNewCalendarEntry(false); }}>Cancel</button><button className="button button-primary" type="submit" disabled={busy || !storage?.editable}>{busy ? "Publishing…" : isNewCalendarEntry ? "Add to calendar" : "Save dividend update"} <Check size={14} /></button></div>
               </form>
             </section>}
             {loading ? (
