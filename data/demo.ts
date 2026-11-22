@@ -41,6 +41,7 @@ export type DividendCompany = {
   payout: number | null;
   manualUpdateAt?: string;
   manualSourceUrl?: string;
+  calendarEvents?: DividendCalendarEvent[];
 };
 
 export const companies: DividendCompany[] = [
