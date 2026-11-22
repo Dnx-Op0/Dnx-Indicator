@@ -676,7 +676,7 @@ function ManualDividendsPage() {
       if (sortBy === "dividend") return (b.dividend ?? -1) - (a.dividend ?? -1);
       if (sortBy === "exDate") return (parseDemoDate(b.exDate)?.getTime() ?? 0) - (parseDemoDate(a.exDate)?.getTime() ?? 0);
       return (Date.parse(b.manualUpdateAt ?? "") || 0) - (Date.parse(a.manualUpdateAt ?? "") || 0);
-    }), [manualRows, query, type, sortBy]);
+    }), [manualRows, query, type, sortBy, dateStatus, sourceStatus, todayKey]);
   const latestUpdate = manualRows.reduce<string | null>((latest, company) =>
     !latest || (Date.parse(company.manualUpdateAt ?? "") || 0) > (Date.parse(latest) || 0) ? company.manualUpdateAt ?? latest : latest, null);
   const upcomingCount = manualRows.filter((company) => {
