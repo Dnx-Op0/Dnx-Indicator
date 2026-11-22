@@ -470,7 +470,7 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
                         aria-label={`Edit ${company.name} dividend update`}
                         title={storage?.editable ? `Edit ${company.name}` : "Persistent storage is not available"}
                         disabled={!storage?.editable || busy}
-                        onClick={() => { setDividendDraft({ ...company }); setError(""); setNotice(""); }}
+                        onClick={() => { setIsNewCalendarEntry(false); setDividendDraft({ ...company }); setError(""); setNotice(""); }}
                       >
                         <Pencil size={13} /> Update
                       </button>
