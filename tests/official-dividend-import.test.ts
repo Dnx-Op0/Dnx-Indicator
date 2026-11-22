@@ -66,6 +66,8 @@ test("keeps upcoming ex-dates and prefers the nearest upcoming event for a repea
   assert.equal(result.duplicateRows, 2);
   assert.equal(result.companies[0].exDate, "05 Dec 2026");
   assert.equal(result.companies[0].dividend, 5);
+  assert.equal(result.companies[0].calendarEvents?.length, 3);
+  assert.deepEqual(result.companies[0].calendarEvents?.map((event) => event.exDate), ["17 Nov 2026", "05 Dec 2026", "15 May 2026"].sort((a, b) => new Date(a).getTime() - new Date(b).getTime()));
 });
 
 test("does not include events more than twelve months in the future", () => {
