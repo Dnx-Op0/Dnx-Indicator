@@ -174,6 +174,10 @@ Update the following information:
 - Payment date.
 - Optional source links.
 
+### Public Manual Updates Page
+
+Every dividend saved through the manual editor is also listed publicly at `/manual-dividends` ("Manual Updates" in the sidebar). Visitors can search, filter by dividend type, sort, and export the entries to CSV. Each row shows the last-updated date and the source link, when one was provided, and is clearly labelled as manually entered and not independently verified.
+
 ### NSE & BSE CSV Import
 
 The developer console supports importing official corporate-action CSV files.

@@ -33,7 +33,7 @@ const useCompanies = () => useContext(CompaniesContext).companies;
 type SectionKey =
   | "dashboard" | "dividend-calendar" | "dividend-screener" | "all-companies"
   | "company-analysis" | "dividend-calculator" | "compare-companies" | "my-portfolio"
-  | "watchlist" | "corporate-actions" | "reports" | "settings" | "owner";
+  | "watchlist" | "corporate-actions" | "manual-dividends" | "reports" | "settings" | "owner";
 
 const navigation: { key: SectionKey; label: string; icon: typeof LayoutDashboard; group: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, group: "Overview" },
@@ -41,6 +41,7 @@ const navigation: { key: SectionKey; label: string; icon: typeof LayoutDashboard
   { key: "dividend-screener", label: "Dividend Screener", icon: ListFilter, group: "Research" },
   { key: "all-companies", label: "All Companies", icon: Building2, group: "Research" },
   { key: "company-analysis", label: "Company Analysis", icon: LineChart, group: "Research" },
+  { key: "manual-dividends", label: "Manual Updates", icon: Pencil, group: "Research" },
   { key: "dividend-calculator", label: "Dividend Calculator", icon: Calculator, group: "Tools" },
   { key: "compare-companies", label: "Compare Companies", icon: GitCompareArrows, group: "Tools" },
   { key: "my-portfolio", label: "My Portfolio", icon: Wallet, group: "My workspace" },
@@ -318,6 +319,7 @@ function Routes(props: {
     case "my-portfolio": return <PortfolioPage holdings={props.holdings} setHoldings={props.setHoldings} />;
     case "watchlist": return <WatchlistPage symbols={props.watchlist} setSymbols={props.setWatchlist} />;
     case "corporate-actions": return <CorporateActionsPage />;
+    case "manual-dividends": return <ManualDividendsPage />;
     case "reports": return <ReportsPage />;
     case "settings": return <SettingsPage theme={props.theme} setTheme={props.setTheme} profile={props.profile} setProfile={props.setProfile} />;
     case "owner": return <OwnerPage />;
@@ -641,6 +643,61 @@ function CorporateActionsPage() {
   return <><PageHeading eyebrow="COMPANY EVENTS" title="Corporate actions" description="Explore dividend entries and sample capital-action notices across listed companies." action={<DemoTag />} /><div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>Dividend details may be manually entered and are not independently verified. Bonus, split, and rights-issue examples remain sample entries. Confirm all actions with official disclosures.</div><DemoTag /></div>
     <div className="action-tabs">{sections.map((item) => <button className={active === item ? "active" : ""} key={item} onClick={() => setActive(item)}>{item}<span>{item === "Dividends" ? availableCompanies.length : item === "Bonus shares" ? "3" : item === "Stock splits" ? "2" : "1"}</span></button>)}</div>
     <Panel title={`${active} announced`} subtitle={active === "Dividends" ? `${availableCompanies.length} current listing records · latest ex-dates first` : "Other action types are illustrative sample information"}><div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Action</th><th>Announcement date</th><th>Ex-date</th><th>Record date</th><th>Details</th><th>Status</th></tr></thead><tbody>{rows.map((company, index) => <tr key={company.symbol}><td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><CompanyDataSource company={company} subtle /></td><td><span className={`type-pill ${company.type.toLowerCase()}`}>{active === "Dividends" ? `${company.type} dividend` : active}</span></td><td>{company.announcement || "—"}</td><td>{company.exDate || "—"}</td><td>{company.recordDate || "—"}</td><td>{active === "Dividends" ? `${currency(company.dividend)} / share` : active === "Bonus shares" ? "1:1 illustrative ratio" : active === "Stock splits" ? "Face value ₹10 to ₹5" : "1:4 illustrative ratio"}</td><td><span className={`status-pill${index > 5 ? " muted-status" : ""}`}>{company.manualUpdateAt ? "Manual · unverified" : company.sourceExchange ? `${company.sourceExchange} CSV` : index > 5 ? "Completed · demo" : "Upcoming · demo"}</span></td></tr>)}</tbody></table></div></Panel>
+  </>;
+}
+
+function ManualDividendsPage() {
+  const availableCompanies = useCompanies();
+  const todayKey = useTodayKey();
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState("All types");
+  const [sortBy, setSortBy] = useState<"updated" | "exDate" | "dividend">("updated");
+  const manualRows = useMemo(() => availableCompanies.filter((company) => company.manualUpdateAt), [availableCompanies]);
+  const rows = useMemo(() => manualRows
+    .filter((company) => `${company.name} ${company.symbol} ${company.exchangeSymbol ?? ""}`.toLowerCase().includes(query.toLowerCase())
+      && (type === "All types" || company.type === type))
+    .sort((a, b) => {
+      if (sortBy === "dividend") return (b.dividend ?? -1) - (a.dividend ?? -1);
+      if (sortBy === "exDate") return (parseDemoDate(b.exDate)?.getTime() ?? 0) - (parseDemoDate(a.exDate)?.getTime() ?? 0);
+      return (Date.parse(b.manualUpdateAt ?? "") || 0) - (Date.parse(a.manualUpdateAt ?? "") || 0);
+    }), [manualRows, query, type, sortBy]);
+  const latestUpdate = manualRows.reduce<string | null>((latest, company) =>
+    !latest || (Date.parse(company.manualUpdateAt ?? "") || 0) > (Date.parse(latest) || 0) ? company.manualUpdateAt ?? latest : latest, null);
+  const upcomingCount = manualRows.filter((company) => {
+    const days = dayOffsetFromToday(company.exDate, todayKey);
+    return days !== null && days >= 0;
+  }).length;
+  const highest = manualRows.filter((company) => company.dividend !== null)
+    .sort((a, b) => (b.dividend ?? 0) - (a.dividend ?? 0))[0];
+  return <><PageHeading eyebrow="MANUALLY MAINTAINED" title="Manual dividend updates" description="Dividend details entered by hand by the DNX team. Each entry shows when it was updated and, where provided, the source it came from."
+    action={<button className="button button-secondary" disabled={!rows.length} onClick={() => downloadCsv("dnx-manual-dividends.csv",
+      ["Company", "Symbol", "Dividend per share", "Type", "Announcement date", "Ex-date", "Record date", "Payment date", "Last updated", "Source link"],
+      rows.map((company) => [company.name, companyExchangeSymbol(company), company.dividend ?? "", company.type, company.announcement, company.exDate, company.recordDate, company.paymentDate, company.manualUpdateAt ? formatManualUpdateDate(company.manualUpdateAt) : "", company.manualSourceUrl ?? ""]))}><Download size={15} /> Export CSV</button>} />
+    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div><b>Manually entered, not independently verified.</b> These figures are typed in by the DNX team and may lag official announcements. Always confirm with the company or the exchange before making decisions.</div><span className="demo-tag"><span />MANUAL</span></div>
+    <div className="metric-grid">
+      <MetricCard label="Manual entries" value={String(manualRows.length).padStart(2, "0")} note="Companies with hand-entered dividends" icon={Pencil} tone="amber" />
+      <MetricCard label="Last updated" value={latestUpdate ? formatManualUpdateDate(latestUpdate) : "—"} note="Most recent manual edit" icon={CalendarDays} tone="blue" />
+      <MetricCard label="Upcoming ex-dates" value={String(upcomingCount).padStart(2, "0")} note="Today or later, manual entries only" icon={Zap} tone="green" />
+      <MetricCard label="Highest dividend / share" value={currency(highest?.dividend ?? null)} note={highest?.name ?? "No amount available"} icon={CircleDollarSign} tone="purple" />
+    </div>
+    <Panel title="Manual dividend entries" subtitle={`${rows.length} of ${manualRows.length} entries`} className="table-panel">
+      {manualRows.length ? <>
+        <div className="dividend-table-tools"><label className="filter-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search company or symbol" /></label>
+          <label>Type<select value={type} onChange={(event) => setType(event.target.value)}>{["All types", "Interim", "Final", "Special", "Dividend"].map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Sort by<select value={sortBy} onChange={(event) => setSortBy(event.target.value as "updated" | "exDate" | "dividend")}><option value="updated">Recently updated</option><option value="exDate">Ex-date</option><option value="dividend">Dividend amount</option></select></label></div>
+        <div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Dividend / share</th><th>Type</th><th>Announced</th><th>Ex-date</th><th>Record date</th><th>Payment date</th><th>Updated</th><th>Source</th></tr></thead><tbody>{rows.map((company) => <tr key={company.symbol}>
+          <td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><ManualUpdateBadge /></td>
+          <td className="amount-cell">{currency(company.dividend)}</td>
+          <td><span className={`type-pill ${company.type.toLowerCase()}`}>{company.type}</span></td>
+          <td>{company.announcement || "—"}</td>
+          <td><b className="date-emphasis">{company.exDate || "—"}</b></td>
+          <td>{company.recordDate || "—"}</td>
+          <td>{company.paymentDate || "—"}</td>
+          <td>{company.manualUpdateAt ? formatManualUpdateDate(company.manualUpdateAt) : "—"}</td>
+          <td>{company.manualSourceUrl?.trim() ? <a className="panel-link" href={company.manualSourceUrl} target="_blank" rel="noopener noreferrer">View source <ArrowUpRight size={12} /></a> : "—"}</td>
+        </tr>)}</tbody></table>{!rows.length && <div className="table-empty">No manual entries match your filters.</div>}</div>
+      </> : <div className="empty-state"><Pencil size={20} /><b>No manual updates yet</b><span>Dividend entries added from the developer console will appear here.</span></div>}
+    </Panel>
   </>;
 }
 
