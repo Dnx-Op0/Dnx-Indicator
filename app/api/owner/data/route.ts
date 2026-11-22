@@ -56,6 +56,20 @@ function validCompany(value: unknown): value is DividendCompany {
     || (company.yieldPeriodStart !== undefined && !company.yieldAsOf)
     || (company.yieldAsOf !== undefined && company.yield === null)) return false;
   if (company.sourceExchange && (!(company.exchangeSymbol as string)?.trim() || !company.sourceUpdatedAt || !company.sourceUrl)) return false;
+  if (company.calendarEvents !== undefined) {
+    if (!Array.isArray(company.calendarEvents) || company.calendarEvents.length > 2000) return false;
+    for (const item of company.calendarEvents) {
+      if (!item || typeof item !== "object") return false;
+      const event = item as Record<string, unknown>;
+      const requiredStrings = ["eventId", "name", "symbol", "exchangeSymbol", "sourceUpdatedAt", "sourceUrl", "sourceDescription", "announcement", "exDate", "recordDate", "paymentDate"];
+      if (!requiredStrings.every((field) => typeof event[field] === "string")) return false;
+      if (!(event.eventId as string).trim() || !(event.name as string).trim() || !(event.symbol as string).trim()) return false;
+      if (event.sourceExchange !== "NSE" && event.sourceExchange !== "BSE") return false;
+      if (!["Interim", "Final", "Special", "Dividend"].includes(String(event.type))) return false;
+      if (event.dividend !== null && (typeof event.dividend !== "number" || !Number.isFinite(event.dividend) || event.dividend < 0)) return false;
+      if (Number.isNaN(Date.parse(event.exDate as string))) return false;
+    }
+  }
   if (!company.sourceExchange && !company.manualUpdateAt && ["marketCap", "yield", "dividend", "payout"].some((field) => company[field] === null)) return false;
   if (typeof company.manualSourceUrl === "string" && company.manualSourceUrl.trim()) {
     try {

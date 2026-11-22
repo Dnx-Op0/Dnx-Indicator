@@ -1,4 +1,4 @@
-import type { DividendCompany } from "@/data/demo";
+import type { DividendCalendarEvent, DividendCompany } from "@/data/demo";
 
 export type Exchange = "NSE" | "BSE";
 
@@ -161,6 +161,7 @@ export function parseOfficialDividendCsv(
 
   const importedAt = asOf.toISOString();
   const latestBySymbol = new Map<string, DividendCompany>();
+  const eventsBySymbol = new Map<string, DividendCalendarEvent[]>();
   let skippedRows = 0;
   let duplicateRows = 0;
 
@@ -200,6 +201,28 @@ export function parseOfficialDividendCsv(
       payout: null,
     };
 
+    const event: DividendCalendarEvent = {
+      eventId: `${symbol}-${exDate}-${purpose}`,
+      name,
+      symbol,
+      exchangeSymbol,
+      sourceExchange: exchange,
+      sourceUpdatedAt: importedAt,
+      sourceUrl: sourceUrls[exchange],
+      sourceDescription: purpose,
+      dividend: company.dividend,
+      type: company.type,
+      announcement: company.announcement,
+      exDate: company.exDate,
+      recordDate: company.recordDate,
+      paymentDate: company.paymentDate,
+    };
+    const symbolEvents = eventsBySymbol.get(symbol) ?? [];
+    if (!symbolEvents.some((item) => item.eventId === event.eventId)) {
+      symbolEvents.push(event);
+      eventsBySymbol.set(symbol, symbolEvents);
+    }
+
     const previous = latestBySymbol.get(symbol);
     if (previous) duplicateRows += 1;
     if (!previous) {
@@ -209,7 +232,8 @@ export function parseOfficialDividendCsv(
       const today = indiaDateKey(asOf);
       const previousIsUpcoming = previousDate >= today;
       const currentIsUpcoming = exDate >= today;
-      // Prefer the nearest upcoming event; if none exists, retain the most recent past event.
+      // Keep the nearest upcoming event as the company summary, while retaining
+      // every distinct dividend row in calendarEvents for the full calendar.
       if ((currentIsUpcoming && !previousIsUpcoming)
         || (currentIsUpcoming && previousIsUpcoming && exDate < previousDate)
         || (!currentIsUpcoming && !previousIsUpcoming && exDate > previousDate)) {
@@ -222,5 +246,11 @@ export function parseOfficialDividendCsv(
     throw new Error(`No dividend records within the import window (12 months past to 12 months future) were found in this ${exchange} export.`);
   }
 
-  return { companies: [...latestBySymbol.values()], skippedRows, duplicateRows };
+  const companies = [...latestBySymbol.entries()].map(([symbol, company]) => ({
+    ...company,
+    calendarEvents: (eventsBySymbol.get(symbol) ?? []).sort((a, b) =>
+      dateValue(a.exDate).localeCompare(dateValue(b.exDate))
+    ),
+  }));
+  return { companies, skippedRows, duplicateRows };
 }

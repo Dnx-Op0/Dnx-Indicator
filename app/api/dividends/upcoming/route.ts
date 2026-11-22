@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { getPrisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic";
-
 function indiaDateKey() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -78,6 +76,7 @@ export async function GET() {
         name: row.company.name,
         symbol,
         exchange,
+        sourceExchange: exchange,
         exchangeSymbol: symbol,
         sector: row.company.sector ?? "Other",
         marketCap: null,

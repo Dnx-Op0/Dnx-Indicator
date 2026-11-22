@@ -191,7 +191,7 @@ Steps:
 5. Preview the imported information.
 6. Select **Import and publish**.
 
-The importer processes eligible equity dividend records, skips non-dividend entries, and preserves unavailable information instead of inventing values. It considers ex-dates from the previous 12 months through the next 12 months. When an issuer has multiple rows, it selects the nearest upcoming ex-date; if there is no upcoming event, it retains the most recent past event. Because the current public calendar data model stores one dividend event per exchange listing, it does not yet retain every separate dividend announcement for the same symbol.
+The importer processes eligible equity dividend records, skips non-dividend entries, and preserves unavailable information instead of inventing values. It considers ex-dates from the previous 12 months through the next 12 months. It keeps every distinct dividend row for the calendar while using the nearest upcoming ex-date (or most recent past ex-date when none is upcoming) as the company-directory summary. Repeated symbols are grouped under one company listing without losing separate dividend events.
 
 Dual-listed companies are maintained as separate exchange listings.
 

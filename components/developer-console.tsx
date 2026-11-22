@@ -148,6 +148,7 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
     };
   }, []);
 
+
   async function runSyncNow() {
     setSyncBusy(true);
     setSyncError("");
@@ -414,12 +415,12 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
                 <label>Exchange<select value={importExchange} onChange={(event) => { setImportExchange(event.target.value as Exchange); setImportPreview(null); setImportFileName(""); }}><option value="NSE">NSE</option><option value="BSE">BSE</option></select></label>
                 <label>Official corporate-actions CSV<input type="file" accept=".csv,text/csv" onChange={(event) => void previewOfficialImport(event)} disabled={importBusy || busy} /></label>
               </div>
-              <div className="developer-sync-notice"><ShieldCheck size={15} /><span>The importer keeps the nearest upcoming dividend event per exchange symbol (or the latest past event if no upcoming event exists), within a 12-month past / 12-month future window. Yield, market cap, payout ratio, and missing dates stay unavailable. Records are saved to the shared dataset and become visible on public pages. Confirm exchange data-reuse rights before publishing beyond your permitted use.</span></div>
+              <div className="developer-sync-notice"><ShieldCheck size={15} /><span>The importer retains every distinct dividend event per exchange symbol within a 12-month past / 12-month future window. The company listing uses the nearest upcoming event as its summary. Yield, market cap, payout ratio, and missing dates stay unavailable. Records are saved to the shared dataset and become visible on public pages. Confirm exchange data-reuse rights before publishing beyond your permitted use.</span></div>
               {importBusy && <div className="developer-empty">Reading and validating CSV…</div>}
               {importPreview && <div className="developer-import-preview">
                 <b>{importFileName}</b>
-                <span>{importPreview.companies.length} unique {importExchange} listings ready · {importPreview.duplicateRows} repeated symbols collapsed · {importPreview.skippedRows} other rows skipped.</span>
-                <ul>{importPreview.companies.slice(0, 5).map((company) => <li key={company.symbol}>{company.name} · {company.exchangeSymbol} · {company.exDate} · {company.dividend === null ? "Amount unavailable" : `₹${company.dividend.toFixed(2)} / share`}</li>)}</ul>
+                <span>{importPreview.companies.length} unique {importExchange} listings · {importPreview.companies.reduce((total, company) => total + (company.calendarEvents?.length ?? 1), 0)} dividend events retained · {importPreview.duplicateRows} repeated-symbol rows preserved · {importPreview.skippedRows} other rows skipped.</span>
+                <ul>{importPreview.companies.slice(0, 5).map((company) => <li key={company.symbol}>{company.name} · {company.exchangeSymbol} · {company.calendarEvents?.length ?? 1} event(s) · next ex-date {company.exDate} · {company.dividend === null ? "Amount unavailable" : `₹${company.dividend.toFixed(2)} / share`}</li>)}</ul>
                 {importPreview.companies.length > 5 && <small>Showing 5 of {importPreview.companies.length} preview records.</small>}
                 <div className="developer-edit-actions"><button className="button button-secondary" type="button" onClick={() => { setImportPreview(null); setImportFileName(""); }}>Cancel</button><button className="button button-primary" type="button" disabled={!storage?.editable || busy} onClick={() => void publishOfficialImport()}>{busy ? "Publishing…" : "Import and publish"} <Check size={14} /></button></div>
               </div>}

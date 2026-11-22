@@ -740,3 +740,46 @@ select option { color: var(--text); background: var(--panel); }
   .owner-company-metrics { flex: 1; margin-left: 34px; }
   .owner-edit-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Dividend calendar: accessible day selection and compact event previews. */
+.calendar-month-large > span { display: inline-flex; align-items: center; gap: 5px; }
+.calendar-today-button { min-height: 28px; }
+.calendar-day-button {
+  width: 100%;
+  min-height: 78px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow: hidden;
+  font: inherit;
+  background: transparent;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.calendar-day-button:hover { background: var(--panel-raised); }
+.calendar-day-button.selected { outline: 2px solid var(--green); outline-offset: -2px; background: rgba(132, 217, 165, .08); }
+.calendar-day-button:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
+.calendar-day-button > span { font-weight: 600; }
+.calendar-day-button > small {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-day-button .calendar-more-events { color: var(--text-muted); }
+.calendar-clear-day { margin-top: 10px; }
+@media (max-width: 900px) {
+  .calendar-page-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .large-calendar-panel { padding: 10px; }
+  .calendar-grid-large { grid-auto-rows: minmax(62px, auto); }
+  .calendar-day-button { min-height: 62px; padding: 5px 3px; }
+  .calendar-day-button > small { font-size: 7px; }
+  .calendar-weekdays > span { font-size: 8px; }
+  .calendar-month-large > div { flex-wrap: wrap; }
+  .calendar-month-large > span { gap: 2px; }
+  .calendar-today-button { padding-inline: 7px; }
+}
+
