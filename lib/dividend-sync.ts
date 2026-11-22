@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { getPrisma } from "@/lib/prisma";
+import { getAuthorizedDividendFeedAdapter } from "@/lib/authorized-dividend-feed";
 
 const MAX_ATTEMPTS = 3;
 
@@ -38,8 +39,7 @@ export class RetryableSyncError extends Error {
 }
 
 function getAuthorizedSourceAdapter(): DividendSourceAdapter | null {
-  // Keep the connector disabled until a documented, authorized feed is approved.
-  return null;
+  return getAuthorizedDividendFeedAdapter();
 }
 
 function delay(milliseconds: number) {
@@ -332,7 +332,7 @@ export async function getDividendSyncStatus() {
 
   return {
     databaseConfigured: true,
-    sourceConfigured: false,
+    sourceConfigured: Boolean(process.env.DNX_DIVIDEND_FEED_URL),
     nextScheduledAt: getNextScheduledSync().toISOString(),
     monitoredCompanies,
     lastSuccessfulAt: lastSuccess?.finishedAt?.toISOString() ?? null,
