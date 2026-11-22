@@ -6,6 +6,9 @@ export type DividendCompany = {
   sourceUpdatedAt?: string;
   sourceUrl?: string;
   sourceDescription?: string;
+  eventId?: string;
+  sourceProvider?: string;
+  verificationStatus?: string;
   yieldAsOf?: string;
   yieldPeriodStart?: string;
   yieldPriceExchange?: "NSE" | "BSE";

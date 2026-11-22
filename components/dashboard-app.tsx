@@ -30,6 +30,9 @@ const CompaniesContext = createContext<{ companies: DividendCompany[]; setCompan
   setCompanies: () => undefined,
 });
 const useCompanies = () => useContext(CompaniesContext).companies;
+type AutoDividendState = { configured: boolean; events: DividendCompany[]; lastSyncedAt: string | null };
+const AutoDividendContext = createContext<AutoDividendState>({ configured: false, events: [], lastSyncedAt: null });
+const useAutoDividends = () => useContext(AutoDividendContext);
 type SectionKey =
   | "dashboard" | "dividend-calendar" | "dividend-screener" | "all-companies"
   | "company-analysis" | "dividend-calculator" | "compare-companies" | "my-portfolio"
@@ -134,6 +137,7 @@ function ManualUpdateNote({ company }: { company: DividendCompany }) {
 
 function CompanyDataSource({ company, subtle = false }: { company: DividendCompany; subtle?: boolean }) {
   if (company.manualUpdateAt) return <ManualUpdateBadge />;
+  if (company.sourceProvider) return <span className="status-pill">AUTO SYNC · {company.sourceExchange ?? "EXCHANGE"}</span>;
   if (company.sourceExchange) return <span className="status-pill">{company.sourceExchange} CSV</span>;
   return <DemoTag subtle={subtle} />;
 }
@@ -141,8 +145,10 @@ function CompanyDataSource({ company, subtle = false }: { company: DividendCompa
 function OfficialSourceNote({ company }: { company: DividendCompany }) {
   if (!company.sourceExchange || !company.sourceUpdatedAt) return null;
   return <div className="manual-update-note"><ShieldCheck size={14} /><span>
-    Imported from the official {company.sourceExchange} corporate-actions CSV on {formatManualUpdateDate(company.sourceUpdatedAt)}. Missing fields are shown as unavailable.
-    {company.sourceUrl && <> <a href={company.sourceUrl} target="_blank" rel="noopener noreferrer">Open exchange source</a>.</>}
+    {company.sourceProvider
+      ? `Automatically synchronized from ${company.sourceProvider} for ${company.sourceExchange} on ${formatManualUpdateDate(company.sourceUpdatedAt)}. Verify the announcement with the exchange before acting.`
+      : `Imported from the official ${company.sourceExchange} corporate-actions CSV on ${formatManualUpdateDate(company.sourceUpdatedAt)}. Missing fields are shown as unavailable.`}
+    {company.sourceUrl && <> <a href={company.sourceUrl} target="_blank" rel="noopener noreferrer">Open source disclosure</a>.</>}
   </span></div>;
 }
 
@@ -224,6 +230,7 @@ function DashboardApp({ section, selectedSymbol }: { section: string; selectedSy
   const activeSection = navigation.some((item) => item.key === section) ? section as SectionKey : "dashboard";
   const [theme, setTheme] = useLocalValue<Theme>("dnx-theme", "dark");
   const [companyList, setCompanyList] = useState(companies);
+  const [autoDividendState, setAutoDividendState] = useState<AutoDividendState>({ configured: false, events: [], lastSyncedAt: null });
   const [companyLoadError, setCompanyLoadError] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -258,12 +265,33 @@ function DashboardApp({ section, selectedSymbol }: { section: string; selectedSy
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function loadAutoDividends() {
+      try {
+        const response = await fetch("/api/dividends/upcoming", { cache: "no-store" });
+        if (!response.ok) throw new Error(`Automatic dividend request failed (${response.status}).`);
+        const result = await response.json() as AutoDividendState;
+        if (!cancelled) setAutoDividendState(result);
+      } catch (error) {
+        console.error("Could not load automatically synchronized dividends.", error);
+      }
+    }
+    void loadAutoDividends();
+    const timer = window.setInterval(() => { void loadAutoDividends(); }, 5 * 60_000);
+    window.addEventListener("focus", loadAutoDividends);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", loadAutoDividends);
+    };
+  }, []);
   const visibleNav = navigation.filter((item) => item.label.toLowerCase().includes(search.toLowerCase()));
   const pageTitle = section === "company-detail"
     ? companyList.find((company) => company.symbol === selectedSymbol)?.name ?? "Company Analysis"
     : navigation.find((item) => item.key === activeSection)?.label ?? "Dashboard";
 
-  return <CompaniesContext.Provider value={{ companies: companyList, setCompanies: setCompanyList }}><div className="app-frame">
+  return <CompaniesContext.Provider value={{ companies: companyList, setCompanies: setCompanyList }}><AutoDividendContext.Provider value={autoDividendState}><div className="app-frame">
     {mobileOpen && <button className="mobile-backdrop" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
     <aside className={`sidebar${mobileOpen ? " sidebar-open" : ""}`}>
       <div className="sidebar-brand"><Link href="/" onClick={() => setMobileOpen(false)}><Logo /></Link><button className="icon-button mobile-close" onClick={() => setMobileOpen(false)} aria-label="Close menu"><X size={18} /></button></div>
@@ -298,7 +326,7 @@ function DashboardApp({ section, selectedSymbol }: { section: string; selectedSy
         <footer className="page-footer"><span>© 2026 DNX INDICATES</span><span id="disclaimer"><ShieldCheck size={13} /> Demo information for illustration only</span><a href="#disclaimer">Data disclaimer</a></footer>
       </div>
     </main>
-  </div></CompaniesContext.Provider>;
+  </div></AutoDividendContext.Provider></CompaniesContext.Provider>;
 }
 
 function Routes(props: {
@@ -351,6 +379,8 @@ function Dashboard({ profile }: { profile: Profile }) {
   const todayKey = useTodayKey();
   const clockKey = useIndiaClockKey();
   const availableCompanies = useCompanies();
+  const autoDividendState = useAutoDividends();
+  const dividendCompanies = autoDividendState.configured ? autoDividendState.events : availableCompanies;
   const firstName = profile.name.trim().split(/\s+/)[0] || "there";
   const indiaHour = Number(clockKey.slice(11, 13));
   const greeting = !clockKey ? "Welcome" : indiaHour < 12 ? "Good morning" : indiaHour < 17 ? "Good afternoon" : "Good evening";
@@ -367,16 +397,16 @@ function Dashboard({ profile }: { profile: Profile }) {
   const marketIsOpen = Boolean(clockKey) && weekday !== "Sun" && weekday !== "Sat"
     && (indiaHour > 9 || (indiaHour === 9 && indiaMinute >= 15))
     && (indiaHour < 15 || (indiaHour === 15 && indiaMinute < 30));
-  const exDateOffsets = availableCompanies.map((company) => ({
+  const exDateOffsets = dividendCompanies.map((company) => ({
     company,
     days: dayOffsetFromToday(company.exDate, todayKey),
   }));
   const upcomingCount = exDateOffsets.filter(({ days }) => days !== null && days >= 0 && days <= 30).length;
   const exDatesToday = exDateOffsets.filter(({ days }) => days === 0).length;
   const exDatesThisWeek = exDateOffsets.filter(({ days }) => days !== null && days >= 0 && days <= 6).length;
-  const highestDividend = availableCompanies.filter((company) => company.dividend !== null)
+  const highestDividend = dividendCompanies.filter((company) => company.dividend !== null)
     .sort((a, b) => (b.dividend ?? 0) - (a.dividend ?? 0))[0];
-  const highestYield = availableCompanies.filter((company) => company.yield !== null)
+  const highestYield = dividendCompanies.filter((company) => company.yield !== null)
     .sort((a, b) => (b.yield ?? 0) - (a.yield ?? 0))[0];
   const upcomingCompanies = exDateOffsets
     .filter(({ days }) => days !== null && days >= 0)
@@ -384,7 +414,7 @@ function Dashboard({ profile }: { profile: Profile }) {
     .slice(0, 6)
     .map(({ company }) => company);
   return <><PageHeading eyebrow={eyebrow} title={`${greeting}, ${firstName}`} description="Your dividend intelligence, all in one place." action={<button className="button button-secondary" onClick={() => downloadCsv("dnx-overview-demo.csv", ["Market index", "Sample value", "Change"], marketIndices.map((item) => [item.name, item.value, item.change]))}><Download size={15} /> Export overview</button>} />
-    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div><b>Illustrative dashboard</b><span> Market prices and historical charts are sample data. Dividend records may be source-labelled exchange CSV imports or unverified manual entries; check the company page for details.</span></div><DemoTag /></div>
+    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div><b>{autoDividendState.configured ? "Automatic dividend feed connected" : "Automatic dividend feed not configured"}</b><span> {autoDividendState.configured ? "Upcoming dividend events below are loaded from the synchronized provider feed. Market prices and historical charts remain sample data." : "Upcoming dividend figures currently fall back to the saved demo/CSV dataset. Connect PostgreSQL and an authorized dividend feed to publish automatic updates."}</span></div><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "DEMO DATA"}</span></div>
     <Panel title="Manual Dividends" subtitle="A separate public area for dividend information entered by the DNX team." action={<Link className="panel-link" href="/manual-dividends">Open manual dividends <ArrowUpRight size={13} /></Link>}>
       <div className="announcement-item"><div className="announcement-icon amber"><Pencil size={16} /></div><div className="announcement-copy"><b>Manually maintained dividend records</b><span>View dividend per share, announcement date, ex-date, record date, payment date and provided source links.</span><small>Manual entries are clearly labelled and should be verified with the company or exchange.</small></div><Link className="panel-link" href="/manual-dividends">View records <ArrowUpRight size={13} /></Link></div>
     </Panel>
@@ -398,7 +428,7 @@ function Dashboard({ profile }: { profile: Profile }) {
       <MetricCard label="Highest dividend / share" value={currency(highestDividend?.dividend ?? null)} note={highestDividend ? `${highestDividend.name} · available record` : "No amount available"} icon={CircleDollarSign} tone="purple" />
       <MetricCard label="Highest dividend yield" value={highestYield?.yield === null || !highestYield ? "—" : `${highestYield.yield.toFixed(2)}%`} note={highestYield?.name ?? "No yield available"} icon={TrendingUp} tone="rose" />
     </div>
-    <div className="content-grid dashboard-row"><Panel title="Upcoming dividends" subtitle="Sorted by ex-date · all available sources" action={<Link className="panel-link" href="/dividend-calendar">Full calendar <ArrowUpRight size={13} /></Link>} className="table-panel"><DividendTable rows={upcomingCompanies} /></Panel>
+    <div className="content-grid dashboard-row"><Panel title="Upcoming dividends" subtitle={autoDividendState.configured ? `Authorized feed · last sync ${autoDividendState.lastSyncedAt ? formatManualUpdateDate(autoDividendState.lastSyncedAt) : "not yet completed"}` : "Demo/CSV records · automatic feed not configured"} action={<Link className="panel-link" href="/dividend-calendar">Full calendar <ArrowUpRight size={13} /></Link>} className="table-panel"><DividendTable rows={upcomingCompanies} /></Panel>
       <Panel title="Dividend calendar" subtitle={`${localToday ? localToday.toLocaleString("en-IN", { month: "long", year: "numeric", timeZone: "Asia/Kolkata" }) : "Current month"} · all available sources`} action={<Link className="panel-link" href="/dividend-calendar">Open calendar <ArrowUpRight size={13} /></Link>}><MiniCalendar /></Panel></div>
     <div className="content-grid lower-grid"><Panel title="Dividend history" subtitle="Illustrative annual dividend distribution" action={<button className="select-button">8 years <ChevronDown size={13} /></button>}><DividendHistoryChart /></Panel>
       <Panel title="Sector distribution" subtitle="Illustrative share of dividend universe"><SectorChart /></Panel>
@@ -421,7 +451,7 @@ function DividendTable({ rows }: { rows: DividendCompany[] }) {
     }), [rows, query, sortBy, ascending]);
   return <>
     <div className="dividend-table-tools"><label className="filter-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Filter companies" /></label><label>Sort by<select value={sortBy} onChange={(event) => setSortBy(event.target.value as "company" | "dividend" | "exDate")}><option value="exDate">Ex-date</option><option value="dividend">Dividend amount</option><option value="company">Company name</option></select></label><button className="icon-button" aria-label="Toggle table sort direction" onClick={() => setAscending(!ascending)}>{ascending ? <ArrowDown size={14} /> : <ArrowUpRight size={14} />}</button></div>
-    <div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Exchange symbol</th><th>Dividend / share</th><th>Type</th><th>Announced</th><th>Ex-date</th><th>Record date</th><th>Payment date</th></tr></thead><tbody>{visibleRows.map((company) => <tr key={company.symbol}><td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><CompanyDataSource company={company} subtle /></td><td><span className="symbol">{companyExchangeSymbol(company)}</span></td><td className="amount-cell">{currency(company.dividend)}</td><td><span className={`type-pill ${company.type.toLowerCase()}`}>{company.type}</span></td><td>{company.announcement || "—"}</td><td><b className="date-emphasis">{company.exDate || "—"}</b></td><td>{company.recordDate || "—"}</td><td>{company.paymentDate || "—"}</td></tr>)}</tbody></table>{!visibleRows.length && <div className="table-empty">No dividend events match your filter.</div>}</div>
+    <div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Exchange symbol</th><th>Dividend / share</th><th>Type</th><th>Announced</th><th>Ex-date</th><th>Record date</th><th>Payment date</th></tr></thead><tbody>{visibleRows.map((company) => <tr key={company.eventId ?? `${company.symbol}-${company.exDate}`}><td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><CompanyDataSource company={company} subtle /></td><td><span className="symbol">{companyExchangeSymbol(company)}</span></td><td className="amount-cell">{currency(company.dividend)}</td><td><span className={`type-pill ${company.type.toLowerCase()}`}>{company.type}</span></td><td>{company.announcement || "—"}</td><td><b className="date-emphasis">{company.exDate || "—"}</b></td><td>{company.recordDate || "—"}</td><td>{company.paymentDate || "—"}</td></tr>)}</tbody></table>{!visibleRows.length && <div className="table-empty">No dividend events match your filter.</div>}</div>
   </>;
 }
 
@@ -455,6 +485,7 @@ function TopCompanies() {
 
 function MiniCalendar() {
   const todayKey = useTodayKey();
+  const autoDividendState = useAutoDividends();
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const viewKey = selectedMonth ?? todayKey.slice(0, 7);
   const viewDate = monthDate(viewKey);
@@ -463,18 +494,21 @@ function MiniCalendar() {
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const availableCompanies = useCompanies();
-  const eventDays = new Set(availableCompanies.flatMap((company) => {
+  const calendarCompanies = autoDividendState.configured ? autoDividendState.events : availableCompanies;
+  const eventDays = new Set(calendarCompanies.flatMap((company) => {
     const date = parseDemoDate(company.exDate);
     return date && monthKey(date) === viewKey ? [date.getDate()] : [];
   }));
   const todayDate = todayKey ? Number(todayKey.slice(-2)) : -1;
   if (!viewDate) return <div className="mini-calendar"><div className="calendar-month"><b>Loading calendar…</b><DemoTag subtle /></div></div>;
-  return <div className="mini-calendar"><div className="calendar-month"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">ALL SOURCES</span></div><span><button aria-label="Previous month" onClick={() => setSelectedMonth(moveMonth(viewKey, -1))}><ChevronLeft size={15} /></button><button aria-label="Next month" onClick={() => setSelectedMonth(moveMonth(viewKey, 1))}><ChevronRight size={15} /></button></span></div><div className="calendar-grid calendar-weekdays">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{Array.from({ length: firstDay }, (_, i) => <span className="calendar-empty" key={`e-${i}`} />)}{Array.from({ length: daysInMonth }, (_, i) => { const day = i + 1; return <span key={day} className={`calendar-day${eventDays.has(day) ? " has-event" : ""}${day === todayDate && viewKey === todayKey.slice(0, 7) ? " today" : ""}`} title={eventDays.has(day) ? "Dividend event" : undefined}>{day}{eventDays.has(day) && <i />}</span>; })}</div><div className="calendar-legend"><span><i />Dividend entry</span><span>{eventDays.size} dates · all sources</span></div></div>;
+  return <div className="mini-calendar"><div className="calendar-month"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "ALL SOURCES"}</span></div><span><button aria-label="Previous month" onClick={() => setSelectedMonth(moveMonth(viewKey, -1))}><ChevronLeft size={15} /></button><button aria-label="Next month" onClick={() => setSelectedMonth(moveMonth(viewKey, 1))}><ChevronRight size={15} /></button></span></div><div className="calendar-grid calendar-weekdays">{["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{Array.from({ length: firstDay }, (_, i) => <span className="calendar-empty" key={`e-${i}`} />)}{Array.from({ length: daysInMonth }, (_, i) => { const day = i + 1; return <span key={day} className={`calendar-day${eventDays.has(day) ? " has-event" : ""}${day === todayDate && viewKey === todayKey.slice(0, 7) ? " today" : ""}`} title={eventDays.has(day) ? "Dividend event" : undefined}>{day}{eventDays.has(day) && <i />}</span>; })}</div><div className="calendar-legend"><span><i />Dividend entry</span><span>{eventDays.size} dates · all sources</span></div></div>;
 }
 
 function CalendarPage() {
   const todayKey = useTodayKey();
   const availableCompanies = useCompanies();
+  const autoDividendState = useAutoDividends();
+  const calendarCompanies = autoDividendState.configured ? autoDividendState.events : availableCompanies;
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const viewKey = selectedMonth ?? todayKey.slice(0, 7);
   const viewDate = monthDate(viewKey);
@@ -482,7 +516,7 @@ function CalendarPage() {
   const month = viewDate?.getMonth() ?? 0;
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthEvents = availableCompanies.flatMap((company) => {
+  const monthEvents = calendarCompanies.flatMap((company) => {
     const date = parseDemoDate(company.exDate);
     return date && monthKey(date) === viewKey ? [{ company, date }] : [];
   });
@@ -494,9 +528,9 @@ function CalendarPage() {
   }, new Map<number, DividendCompany[]>());
   const todayDate = todayKey ? Number(todayKey.slice(-2)) : -1;
   return <><PageHeading eyebrow="EVENT TRACKER" title="Dividend calendar" description="Stay ahead of upcoming ex-dates, record dates and payment dates." />
-    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>Events can be bundled demo data, exchange CSV imports, or manual entries. Manual entries are not independently verified; confirm every record against the linked official disclosure.</div><span className="status-pill">SOURCES LABELLED</span></div>
-    <div className="calendar-page-layout"><Panel title="Monthly calendar" subtitle="Dividend events from all available sources" action={<button className="button button-secondary button-small" onClick={() => downloadCsv("dnx-calendar-entries.csv", ["Company", "Exchange symbol", "Dividend per share", "Announcement date", "Ex-date", "Record date", "Payment date"], availableCompanies.map((company) => [company.name, companyExchangeSymbol(company), company.dividend, company.announcement, company.exDate, company.recordDate, company.paymentDate]))}><Download size={13} /> Export</button>} className="large-calendar-panel"><div className="calendar-month calendar-month-large"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">ALL SOURCES</span></div><span><button className="icon-button" aria-label="Previous month" onClick={() => setSelectedMonth(moveMonth(viewKey, -1))}><ChevronLeft size={17} /></button><button className="icon-button" aria-label="Next month" onClick={() => setSelectedMonth(moveMonth(viewKey, 1))}><ChevronRight size={17} /></button></span></div><div className="calendar-grid calendar-weekdays">{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid calendar-grid-large">{Array.from({ length: firstDay }, (_, i) => <div key={`blank-${i}`} className="large-calendar-day muted" />)}{Array.from({ length: daysInMonth }, (_, i) => { const day = i + 1; const dayCompanies = eventsByDay.get(day) ?? []; return <div key={day} className={`large-calendar-day${dayCompanies.length ? " event-day" : ""}${day === todayDate && viewKey === todayKey.slice(0, 7) ? " today" : ""}`}><span>{day}</span>{dayCompanies.map((company) => <small key={company.symbol}>{company.name}<CompanyDataSource company={company} subtle /></small>)}</div>; })}</div><div className="calendar-legend"><span><i />Dividend event</span><span>{monthEvents.length} entries · all sources</span></div></Panel>
-      <Panel title="Upcoming events" subtitle={`${viewDate.toLocaleString("en-US", { month: "long" })} · all available sources`}><div className="event-list">{monthEvents.length ? monthEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).map(({ company, date }) => <div className="event-item" key={company.symbol}><div className="event-date"><b>{String(date.getDate()).padStart(2, "0")}</b><span>{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div><div><Link href={`/company-analysis/${company.symbol}`}><b>{company.name}</b></Link><small>{companyExchangeSymbol(company)} · {company.type} dividend</small></div><strong>{currency(company.dividend)}</strong></div>) : <div className="table-empty">No dividend events for this month.</div>}</div></Panel></div></>;
+    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>{autoDividendState.configured ? "Upcoming calendar entries are automatically synchronized from the configured dividend feed. Check the source disclosure before making investment decisions." : "Automatic synchronization is not configured yet. This calendar currently shows saved demo and CSV records; manual entries remain separate and unverified."}</div><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "SOURCES LABELLED"}</span></div>
+    <div className="calendar-page-layout"><Panel title="Monthly calendar" subtitle={autoDividendState.configured ? "Automatically synchronized upcoming dividend events" : "Saved demo and exchange CSV dividend events"} action={<button className="button button-secondary button-small" onClick={() => downloadCsv("dnx-calendar-entries.csv", ["Company", "Exchange symbol", "Dividend per share", "Announcement date", "Ex-date", "Record date", "Payment date"], calendarCompanies.map((company) => [company.name, companyExchangeSymbol(company), company.dividend, company.announcement, company.exDate, company.recordDate, company.paymentDate]))}><Download size={13} /> Export</button>} className="large-calendar-panel"><div className="calendar-month calendar-month-large"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "ALL SOURCES"}</span></div><span><button className="icon-button" aria-label="Previous month" onClick={() => setSelectedMonth(moveMonth(viewKey, -1))}><ChevronLeft size={17} /></button><button className="icon-button" aria-label="Next month" onClick={() => setSelectedMonth(moveMonth(viewKey, 1))}><ChevronRight size={17} /></button></span></div><div className="calendar-grid calendar-weekdays">{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid calendar-grid-large">{Array.from({ length: firstDay }, (_, i) => <div key={`blank-${i}`} className="large-calendar-day muted" />)}{Array.from({ length: daysInMonth }, (_, i) => { const day = i + 1; const dayCompanies = eventsByDay.get(day) ?? []; return <div key={day} className={`large-calendar-day${dayCompanies.length ? " event-day" : ""}${day === todayDate && viewKey === todayKey.slice(0, 7) ? " today" : ""}`}><span>{day}</span>{dayCompanies.map((company) => <small key={company.eventId ?? `${company.symbol}-${company.exDate}`}>{company.name}<CompanyDataSource company={company} subtle /></small>)}</div>; })}</div><div className="calendar-legend"><span><i />Dividend event</span><span>{monthEvents.length} entries · all sources</span></div></Panel>
+      <Panel title="Upcoming events" subtitle={`${viewDate.toLocaleString("en-US", { month: "long" })} · all available sources`}><div className="event-list">{monthEvents.length ? monthEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).map(({ company, date }) => <div className="event-item" key={company.eventId ?? `${company.symbol}-${company.exDate}`}><div className="event-date"><b>{String(date.getDate()).padStart(2, "0")}</b><span>{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div><div><Link href={`/company-analysis/${company.symbol}`}><b>{company.name}</b></Link><small>{companyExchangeSymbol(company)} · {company.type} dividend</small></div><strong>{currency(company.dividend)}</strong></div>) : <div className="table-empty">No dividend events for this month.</div>}</div></Panel></div></>;
 }
 
 function CompaniesPage({ screener = false }: { screener?: boolean }) {
@@ -640,16 +674,18 @@ function WatchlistPage({ symbols, setSymbols }: { symbols: string[]; setSymbols:
 
 function CorporateActionsPage() {
   const availableCompanies = useCompanies();
+  const autoDividendState = useAutoDividends();
+  const dividendCompanies = autoDividendState.configured ? autoDividendState.events : availableCompanies;
   const [active, setActive] = useState("Dividends");
   const sections = ["Dividends", "Bonus shares", "Stock splits", "Rights issues"];
-  const dividendRows = [...availableCompanies]
+  const dividendRows = [...dividendCompanies]
     .sort((a, b) => (parseDemoDate(b.exDate)?.getTime() ?? 0) - (parseDemoDate(a.exDate)?.getTime() ?? 0))
     .slice(0, 50);
   const sampleRows = availableCompanies.filter((company) => !company.sourceExchange).slice(0, 4);
   const rows = active === "Dividends" ? dividendRows : sampleRows;
-  return <><PageHeading eyebrow="COMPANY EVENTS" title="Corporate actions" description="Explore dividend entries and sample capital-action notices across listed companies." action={<DemoTag />} /><div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>Dividend details may be manually entered and are not independently verified. Bonus, split, and rights-issue examples remain sample entries. Confirm all actions with official disclosures.</div><DemoTag /></div>
-    <div className="action-tabs">{sections.map((item) => <button className={active === item ? "active" : ""} key={item} onClick={() => setActive(item)}>{item}<span>{item === "Dividends" ? availableCompanies.length : item === "Bonus shares" ? "3" : item === "Stock splits" ? "2" : "1"}</span></button>)}</div>
-    <Panel title={`${active} announced`} subtitle={active === "Dividends" ? `${availableCompanies.length} current listing records · latest ex-dates first` : "Other action types are illustrative sample information"}><div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Action</th><th>Announcement date</th><th>Ex-date</th><th>Record date</th><th>Details</th><th>Status</th></tr></thead><tbody>{rows.map((company, index) => <tr key={company.symbol}><td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><CompanyDataSource company={company} subtle /></td><td><span className={`type-pill ${company.type.toLowerCase()}`}>{active === "Dividends" ? `${company.type} dividend` : active}</span></td><td>{company.announcement || "—"}</td><td>{company.exDate || "—"}</td><td>{company.recordDate || "—"}</td><td>{active === "Dividends" ? `${currency(company.dividend)} / share` : active === "Bonus shares" ? "1:1 illustrative ratio" : active === "Stock splits" ? "Face value ₹10 to ₹5" : "1:4 illustrative ratio"}</td><td><span className={`status-pill${index > 5 ? " muted-status" : ""}`}>{company.manualUpdateAt ? "Manual · unverified" : company.sourceExchange ? `${company.sourceExchange} CSV` : index > 5 ? "Completed · demo" : "Upcoming · demo"}</span></td></tr>)}</tbody></table></div></Panel>
+  return <><PageHeading eyebrow="COMPANY EVENTS" title="Corporate actions" description="Explore dividend entries and sample capital-action notices across listed companies." action={<DemoTag />} /><div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>{autoDividendState.configured ? "Dividend rows are synchronized automatically from the configured provider. Bonus, split, and rights-issue examples remain sample entries." : "Dividend details currently use saved demo/CSV records. Bonus, split, and rights-issue examples remain sample entries; confirm all actions with official disclosures."}</div><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "DEMO DATA"}</span></div>
+    <div className="action-tabs">{sections.map((item) => <button className={active === item ? "active" : ""} key={item} onClick={() => setActive(item)}>{item}<span>{item === "Dividends" ? dividendCompanies.length : item === "Bonus shares" ? "3" : item === "Stock splits" ? "2" : "1"}</span></button>)}</div>
+    <Panel title={`${active} announced`} subtitle={active === "Dividends" ? `${dividendCompanies.length} dividend records · latest ex-dates first` : "Other action types are illustrative sample information"}><div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Action</th><th>Announcement date</th><th>Ex-date</th><th>Record date</th><th>Details</th><th>Status</th></tr></thead><tbody>{rows.map((company, index) => <tr key={company.eventId ?? `${company.symbol}-${company.exDate}`}><td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><CompanyDataSource company={company} subtle /></td><td><span className={`type-pill ${company.type.toLowerCase()}`}>{active === "Dividends" ? `${company.type} dividend` : active}</span></td><td>{company.announcement || "—"}</td><td>{company.exDate || "—"}</td><td>{company.recordDate || "—"}</td><td>{active === "Dividends" ? `${currency(company.dividend)} / share` : active === "Bonus shares" ? "1:1 illustrative ratio" : active === "Stock splits" ? "Face value ₹10 to ₹5" : "1:4 illustrative ratio"}</td><td><span className={`status-pill${index > 5 ? " muted-status" : ""}`}>{company.manualUpdateAt ? "Manual · unverified" : company.sourceProvider ? "Automatically synced" : company.sourceExchange ? `${company.sourceExchange} CSV` : index > 5 ? "Completed · demo" : "Upcoming · demo"}</span></td></tr>)}</tbody></table></div></Panel>
   </>;
 }
 
