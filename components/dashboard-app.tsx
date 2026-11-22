@@ -281,7 +281,7 @@ function DashboardApp({ section, selectedSymbol }: { section: string; selectedSy
       </div>
       <div className="sidebar-bottom">
         <div className="pro-card"><div className="pro-icon"><Sparkles size={15} /></div><b>Smarter income insights</b><p>Explore dividend opportunities across the market.</p><Link href="/dividend-screener">Open screener <ArrowUpRight size={13} /></Link></div>
-        <div className="profile-row"><div className="avatar">{profile.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</div><div><b>{profile.name}</b><small>Free plan</small></div><MoreHorizontal size={17} className="profile-more" /></div>
+        <Link href="/settings" className="profile-row" aria-label="Open profile settings"><div className="avatar">{profile.name.trim().split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "U"}</div><div><b>{profile.name || "Your profile"}</b><small>{profile.email || "Add your email"} · Edit profile</small></div><MoreHorizontal size={17} className="profile-more" /></Link>
       </div>
     </aside>
 
@@ -874,11 +874,38 @@ function SettingsPage({ theme, setTheme, profile, setProfile }: {
 }) {
   const [currencyFormat, setCurrencyFormat] = useState("INR (₹)");
   const [notifications, setNotifications] = useState(true);
+  const [profileDraft, setProfileDraft] = useState<Profile>(profile);
   const [profileSaved, setProfileSaved] = useState(false);
+  const [profileError, setProfileError] = useState("");
+
+  useEffect(() => {
+    setProfileDraft(profile);
+    setProfileSaved(false);
+  }, [profile]);
+
+  function saveProfile() {
+    const name = profileDraft.name.trim();
+    const email = profileDraft.email.trim();
+    if (!name) {
+      setProfileError("Please enter your full name.");
+      setProfileSaved(false);
+      return;
+    }
+    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      setProfileError("Please enter a valid email address.");
+      setProfileSaved(false);
+      return;
+    }
+    setProfile({ name, email });
+    setProfileDraft({ name, email });
+    setProfileError("");
+    setProfileSaved(true);
+  }
+
   return <><PageHeading eyebrow="PREFERENCES" title="Settings" description="Personalize how DNX INDICATES looks and how your sample data is displayed." action={<DemoTag />} /><Panel title="Appearance" subtitle="Choose your preferred dashboard theme"><div className="setting-row"><div className="setting-icon"><Sun size={17} /></div><div className="setting-copy"><b>Color theme</b><span>Switch between the dark and light interface.</span></div><div className="segmented-control"><button className={theme === "dark" ? "active" : ""} onClick={() => setTheme("dark")}><Moon size={14} /> Dark</button><button className={theme === "light" ? "active" : ""} onClick={() => setTheme("light")}><Sun size={14} /> Light</button></div></div></Panel>
     <Panel title="Display preferences" subtitle="Adjust how figures are presented"><div className="setting-row"><div className="setting-icon"><CircleDollarSign size={17} /></div><div className="setting-copy"><b>Currency format</b><span>Used in calculations and financial tables.</span></div><select className="settings-select" value={currencyFormat} onChange={(event) => setCurrencyFormat(event.target.value)}><option>INR (₹)</option><option>INR (Indian grouping)</option></select></div><div className="setting-row"><div className="setting-icon"><Bell size={17} /></div><div className="setting-copy"><b>Dividend date reminders</b><span>Show reminder indicators for upcoming sample events.</span></div><button className={`switch${notifications ? " on" : ""}`} role="switch" aria-checked={notifications} onClick={() => setNotifications(!notifications)}><i /></button></div><div className="setting-row"><div className="setting-icon"><SlidersHorizontal size={17} /></div><div className="setting-copy"><b>Show demo-data labels</b><span>Demo labels are always visible to avoid confusion.</span></div><span className="always-on"><Check size={13} /> Always on</span></div></Panel>
-    <Panel title="Profile" subtitle="Basic account interface"><div className="profile-settings"><div className="profile-large-avatar">{profile.name.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</div><div className="profile-fields"><label>Full name<input value={profile.name} onChange={(event) => { setProfile({ ...profile, name: event.target.value }); setProfileSaved(false); }} /></label><label>Email address<input type="email" value={profile.email} onChange={(event) => { setProfile({ ...profile, email: event.target.value }); setProfileSaved(false); }} /></label><label>Account type<input value="Personal workspace" readOnly /></label><button className="button button-primary" onClick={() => setProfileSaved(true)}><Check size={15} /> Save changes</button>{profileSaved && <span className="success-message">Profile preferences saved in this browser.</span>}</div></div></Panel>
-    <div className="settings-note"><ShieldCheck size={15} /><span>Your watchlist, portfolio, profile, and theme preferences are stored locally in this browser. No financial or profile data is sent to a server.</span></div>
+    <Panel title="Profile" subtitle="Edit the name and email shown in your DNX workspace"><div className="profile-settings"><div className="profile-large-avatar">{profileDraft.name.trim().split(/\\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "U"}</div><div className="profile-fields"><label>Full name<input autoComplete="name" value={profileDraft.name} onChange={(event) => { setProfileDraft({ ...profileDraft, name: event.target.value }); setProfileSaved(false); setProfileError(""); }} /></label><label>Email address<input type="email" autoComplete="email" value={profileDraft.email} onChange={(event) => { setProfileDraft({ ...profileDraft, email: event.target.value }); setProfileSaved(false); setProfileError(""); }} /></label><label>Account type<input value="Personal workspace" readOnly /></label><button className="button button-primary" type="button" onClick={saveProfile}><Check size={15} /> Save changes</button>{profileError && <span className="inline-error" role="alert">{profileError}</span>}{profileSaved && <span className="success-message" role="status">Profile saved in this browser. Your dashboard greeting and sidebar are updated.</span>}</div></div></Panel>
+    <div className="settings-note"><ShieldCheck size={15} /><span>Your profile, watchlist, portfolio, and theme preferences are stored in this browser only. They are not connected to a login account or synced across devices.</span></div>
   </>;
 }
 
