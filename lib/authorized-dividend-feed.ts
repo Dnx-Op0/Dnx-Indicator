@@ -7,6 +7,7 @@ type FeedRow = {
   id?: unknown;
   exchange?: unknown;
   symbol?: unknown;
+  companyName?: unknown;
   amountPerShare?: unknown;
   percentage?: unknown;
   dividendType?: unknown;
@@ -117,11 +118,11 @@ export function getAuthorizedDividendFeedAdapter(): DividendSourceAdapter | null
       }
 
       const prisma = getPrisma();
-      const companies = await prisma.company.findMany({
+      const companyByKey = new Map<string, string>();
+      const existingCompanies = await prisma.company.findMany({
         select: { id: true, nseSymbol: true, bseCode: true },
       });
-      const companyByKey = new Map<string, string>();
-      for (const company of companies) {
+      for (const company of existingCompanies) {
         if (company.nseSymbol) companyByKey.set(`NSE:${company.nseSymbol.toUpperCase()}`, company.id);
         if (company.bseCode) companyByKey.set(`BSE:${company.bseCode.toUpperCase()}`, company.id);
       }
@@ -134,8 +135,28 @@ export function getAuthorizedDividendFeedAdapter(): DividendSourceAdapter | null
         const exchange = raw.exchange === "BSE" ? "BSE" : raw.exchange === "NSE" ? "NSE" : null;
         if (!exchange) continue;
         const symbol = normalizedSymbol(raw.symbol);
-        const companyId = companyByKey.get(`${exchange}:${symbol}`);
-        if (!companyId) continue;
+        const key = `${exchange}:${symbol}`;
+        let companyId = companyByKey.get(key);
+        if (!companyId) {
+          const name = typeof raw.companyName === "string" && raw.companyName.trim()
+            ? raw.companyName.trim()
+            : symbol;
+          const created = exchange === "NSE"
+            ? await prisma.company.upsert({
+                where: { nseSymbol: symbol },
+                create: { name, nseSymbol: symbol },
+                update: { name },
+                select: { id: true },
+              })
+            : await prisma.company.upsert({
+                where: { bseCode: symbol },
+                create: { name, bseCode: symbol },
+                update: { name },
+                select: { id: true },
+              });
+          companyId = created.id;
+          companyByKey.set(key, companyId);
+        }
 
         const amount = decimal(raw.amountPerShare, "amountPerShare");
         const externalId = typeof raw.id === "string" || typeof raw.id === "number"
