@@ -3,6 +3,8 @@ import "server-only";
 import type { Prisma } from "@/lib/generated/prisma/client";
 import { getPrisma } from "@/lib/prisma";
 import { getAuthorizedDividendFeedAdapter } from "@/lib/authorized-dividend-feed";
+import { RetryableSyncError } from "@/lib/retryable-sync-error";
+export { RetryableSyncError } from "@/lib/retryable-sync-error";
 
 const MAX_ATTEMPTS = 3;
 
@@ -30,13 +32,6 @@ export type DividendSourceAdapter = {
     records: DividendSourceRecord[];
   }>;
 };
-
-export class RetryableSyncError extends Error {
-  constructor() {
-    super("The authorized dividend source is temporarily unavailable.");
-    this.name = "RetryableSyncError";
-  }
-}
 
 function getAuthorizedSourceAdapter(): DividendSourceAdapter | null {
   return getAuthorizedDividendFeedAdapter();
