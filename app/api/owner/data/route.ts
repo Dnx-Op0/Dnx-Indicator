@@ -56,7 +56,7 @@ function validCompany(value: unknown): value is DividendCompany {
     || (company.yieldPeriodStart !== undefined && !company.yieldAsOf)
     || (company.yieldAsOf !== undefined && company.yield === null)) return false;
   if (company.sourceExchange && (!(company.exchangeSymbol as string)?.trim() || !company.sourceUpdatedAt || !company.sourceUrl)) return false;
-  if (!company.sourceExchange && ["marketCap", "yield", "dividend", "payout"].some((field) => company[field] === null)) return false;
+  if (!company.sourceExchange && !company.manualUpdateAt && ["marketCap", "yield", "dividend", "payout"].some((field) => company[field] === null)) return false;
   if (typeof company.manualSourceUrl === "string" && company.manualSourceUrl.trim()) {
     try {
       const sourceUrl = new URL(company.manualSourceUrl);
@@ -75,7 +75,7 @@ function validCompany(value: unknown): value is DividendCompany {
   }
   return ["announcement", "exDate", "recordDate", "paymentDate"].every((field) => {
     const date = (company[field] as string).trim();
-    return date ? !Number.isNaN(Date.parse(date)) : Boolean(company.sourceExchange);
+    return date ? !Number.isNaN(Date.parse(date)) : Boolean(company.sourceExchange || (company.manualUpdateAt && field !== "exDate"));
   }) && Boolean((company.exDate as string).trim());
 }
 
