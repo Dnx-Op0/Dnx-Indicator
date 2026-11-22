@@ -13,6 +13,7 @@ const sections = new Set([
   "my-portfolio",
   "watchlist",
   "corporate-actions",
+  "manual-dividends",
   "reports",
   "settings",
   "owner",
