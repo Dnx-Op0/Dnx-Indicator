@@ -508,29 +508,82 @@ function CalendarPage() {
   const todayKey = useTodayKey();
   const availableCompanies = useCompanies();
   const autoDividendState = useAutoDividends();
-  const calendarCompanies = autoDividendState.configured ? autoDividendState.events : availableCompanies;
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const viewKey = selectedMonth ?? todayKey.slice(0, 7);
   const viewDate = monthDate(viewKey);
   const year = viewDate?.getFullYear() ?? 0;
   const month = viewDate?.getMonth() ?? 0;
   const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Never show bundled demo rows as real upcoming dividends. The calendar uses
+  // synchronized records plus official NSE/BSE CSV imports only.
+  const officialCsvEvents = availableCompanies.filter((company) =>
+    Boolean(company.sourceExchange && company.sourceUpdatedAt && !company.manualUpdateAt)
+  );
+  const combinedEvents = [...autoDividendState.events, ...officialCsvEvents];
+  const seenEvents = new Set<string>();
+  const calendarCompanies = combinedEvents.filter((company) => {
+    const exchange = company.sourceExchange ?? company.exchangeSymbol?.split(":")[0] ?? "NSE";
+    const key = [exchange, company.symbol, company.exDate, company.dividend ?? ""].join("|").toUpperCase();
+    if (seenEvents.has(key)) return false;
+    seenEvents.add(key);
+    return true;
+  });
   const monthEvents = calendarCompanies.flatMap((company) => {
     const date = parseDemoDate(company.exDate);
-    return date && monthKey(date) === viewKey ? [{ company, date }] : [];
-  });
-  if (!viewDate) return <><PageHeading eyebrow="EVENT TRACKER" title="Dividend calendar" description="Stay ahead of upcoming ex-dates, record dates and payment dates." /><Panel title="Monthly calendar" subtitle="Loading current date…"><div className="owner-loading">Calendar is loading the current India date.</div></Panel></>;
-  const eventsByDay = monthEvents.reduce((events, { company, date }) => {
-    const day = date.getDate();
-    events.set(day, [...(events.get(day) ?? []), company]);
+    if (!date) return [];
+    const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return dateKey >= todayKey && monthKey(date) === viewKey ? [{ company, date, dateKey }] : [];
+  }).sort((a, b) => a.date.getTime() - b.date.getTime()
+    || a.company.name.localeCompare(b.company.name));
+  if (!viewDate || !todayKey) return <><PageHeading eyebrow="EVENT TRACKER" title="Dividend calendar" description="Track announced dividend ex-dates month by month." /><Panel title="Monthly calendar" subtitle="Loading current India date…"><div className="owner-loading">Calendar is loading the current India date.</div></Panel></>;
+
+  const eventsByDay = monthEvents.reduce((events, item) => {
+    const day = item.date.getDate();
+    events.set(day, [...(events.get(day) ?? []), item.company]);
     return events;
   }, new Map<number, DividendCompany[]>());
-  const todayDate = todayKey ? Number(todayKey.slice(-2)) : -1;
-  return <><PageHeading eyebrow="EVENT TRACKER" title="Dividend calendar" description="Stay ahead of upcoming ex-dates, record dates and payment dates." />
-    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>{autoDividendState.configured ? "Upcoming calendar entries are automatically synchronized from the configured dividend feed. Check the source disclosure before making investment decisions." : "Automatic synchronization is not configured yet. This calendar currently shows saved demo and CSV records; manual entries remain separate and unverified."}</div><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "SOURCES LABELLED"}</span></div>
-    <div className="calendar-page-layout"><Panel title="Monthly calendar" subtitle={autoDividendState.configured ? "Automatically synchronized upcoming dividend events" : "Saved demo and exchange CSV dividend events"} action={<button className="button button-secondary button-small" onClick={() => downloadCsv("dnx-calendar-entries.csv", ["Company", "Exchange symbol", "Dividend per share", "Announcement date", "Ex-date", "Record date", "Payment date"], calendarCompanies.map((company) => [company.name, companyExchangeSymbol(company), company.dividend, company.announcement, company.exDate, company.recordDate, company.paymentDate]))}><Download size={13} /> Export</button>} className="large-calendar-panel"><div className="calendar-month calendar-month-large"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">{autoDividendState.configured ? "AUTO SYNC" : "ALL SOURCES"}</span></div><span><button className="icon-button" aria-label="Previous month" onClick={() => setSelectedMonth(moveMonth(viewKey, -1))}><ChevronLeft size={17} /></button><button className="icon-button" aria-label="Next month" onClick={() => setSelectedMonth(moveMonth(viewKey, 1))}><ChevronRight size={17} /></button></span></div><div className="calendar-grid calendar-weekdays">{["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid calendar-grid-large">{Array.from({ length: firstDay }, (_, i) => <div key={`blank-${i}`} className="large-calendar-day muted" />)}{Array.from({ length: daysInMonth }, (_, i) => { const day = i + 1; const dayCompanies = eventsByDay.get(day) ?? []; return <div key={day} className={`large-calendar-day${dayCompanies.length ? " event-day" : ""}${day === todayDate && viewKey === todayKey.slice(0, 7) ? " today" : ""}`}><span>{day}</span>{dayCompanies.map((company) => <small key={company.eventId ?? `${company.symbol}-${company.exDate}`}>{company.name}<CompanyDataSource company={company} subtle /></small>)}</div>; })}</div><div className="calendar-legend"><span><i />Dividend event</span><span>{monthEvents.length} entries · all sources</span></div></Panel>
-      <Panel title="Upcoming events" subtitle={`${viewDate.toLocaleString("en-US", { month: "long" })} · all available sources`}><div className="event-list">{monthEvents.length ? monthEvents.sort((a, b) => a.date.getTime() - b.date.getTime()).map(({ company, date }) => <div className="event-item" key={company.eventId ?? `${company.symbol}-${company.exDate}`}><div className="event-date"><b>{String(date.getDate()).padStart(2, "0")}</b><span>{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div><div><Link href={`/company-analysis/${company.symbol}`}><b>{company.name}</b></Link><small>{companyExchangeSymbol(company)} · {company.type} dividend</small></div><strong>{currency(company.dividend)}</strong></div>) : <div className="table-empty">No dividend events for this month.</div>}</div></Panel></div></>;
+  const selectedEvents = selectedDay
+    ? monthEvents.filter((item) => item.dateKey === selectedDay)
+    : monthEvents;
+  const lastSyncedLabel = autoDividendState.lastSyncedAt
+    ? formatManualUpdateDate(autoDividendState.lastSyncedAt)
+    : "Not synced yet";
+  const changeMonth = (nextMonth: string) => {
+    setSelectedMonth(nextMonth);
+    setSelectedDay(null);
+  };
+  return <><PageHeading eyebrow="EVENT TRACKER" title="Dividend calendar" description="Track announced dividend ex-dates month by month, with source details for every entry." />
+    <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div>
+      {autoDividendState.configured
+        ? `Showing synchronized dividend announcements and official NSE/BSE CSV imports. Last successful sync: ${lastSyncedLabel}. Only future ex-dates are shown.`
+        : "Automatic feed is not connected. Showing official NSE/BSE CSV imports only; bundled demo examples and unverified manual entries are excluded."}
+    </div><span className="status-pill">{autoDividendState.configured ? "SYNC FEED" : "OFFICIAL CSV"}</span></div>
+    <div className="calendar-page-layout"><Panel title="Monthly calendar" subtitle={`${monthEvents.length} upcoming dividend ${monthEvents.length === 1 ? "event" : "events"} in ${viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}`} action={<button className="button button-secondary button-small" onClick={() => downloadCsv("dnx-upcoming-dividends.csv", ["Company", "Exchange", "Symbol", "Dividend per share", "Dividend type", "Ex-date", "Record date", "Payment date", "Source"], monthEvents.map(({ company }) => [company.name, company.sourceExchange ?? "—", companyExchangeSymbol(company), company.dividend, company.type, company.exDate, company.recordDate, company.paymentDate, company.sourceProvider ?? company.sourceExchange ?? "—"] ))}><Download size={13} /> Export month</button>} className="large-calendar-panel">
+      <div className="calendar-month calendar-month-large"><div><b>{viewDate.toLocaleString("en-US", { month: "long", year: "numeric" })}</b><span className="status-pill">{monthEvents.length} EVENTS</span></div><span><button className="button button-secondary button-small calendar-today-button" onClick={() => changeMonth(todayKey.slice(0, 7))}>Today</button><button className="icon-button" aria-label="Previous month" onClick={() => changeMonth(moveMonth(viewKey, -1))}><ChevronLeft size={17} /></button><button className="icon-button" aria-label="Next month" onClick={() => changeMonth(moveMonth(viewKey, 1))}><ChevronRight size={17} /></button></span></div>
+      <div className="calendar-grid calendar-weekdays">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <span key={day}>{day}</span>)}</div>
+      <div className="calendar-grid calendar-grid-large">{Array.from({ length: firstDay }, (_, i) => <div key={`blank-${i}`} className="large-calendar-day muted" aria-hidden="true" />)}{Array.from({ length: daysInMonth }, (_, i) => {
+        const day = i + 1;
+        const dayCompanies = eventsByDay.get(day) ?? [];
+        const dayKey = `${viewKey}-${String(day).padStart(2, "0")}`;
+        const isToday = dayKey === todayKey;
+        return <button type="button" key={day} aria-label={`${dayKey}: ${dayCompanies.length} dividend events`} aria-pressed={selectedDay === dayKey} className={`large-calendar-day calendar-day-button${dayCompanies.length ? " event-day" : ""}${isToday ? " today" : ""}${selectedDay === dayKey ? " selected" : ""}`} onClick={() => setSelectedDay(selectedDay === dayKey ? null : dayKey)}>
+          <span>{day}</span>{dayCompanies.slice(0, 2).map((company) => <small key={company.eventId ?? `${company.symbol}-${company.exDate}`}>{company.name}</small>)}{dayCompanies.length > 2 && <small className="calendar-more-events">+{dayCompanies.length - 2} more</small>}
+        </button>;
+      })}</div>
+      <div className="calendar-legend"><span><i />Upcoming ex-date</span><span>Click a date to filter events · {monthEvents.length} total</span></div>
+      </Panel>
+      <Panel title={selectedDay ? `Events on ${selectedDay}` : "Upcoming events"} subtitle={selectedDay ? "Selected calendar date" : `${viewDate.toLocaleString("en-US", { month: "long" })} · sorted by ex-date`}>
+        <div className="event-list">{selectedEvents.length ? selectedEvents.map(({ company, date }) => <div className="event-item" key={company.eventId ?? `${company.symbol}-${company.exDate}`}>
+          <div className="event-date"><b>{String(date.getDate()).padStart(2, "0")}</b><span>{date.toLocaleString("en-US", { month: "short" }).toUpperCase()}</span></div>
+          <div><Link href={`/company-analysis/${company.symbol}`}><b>{company.name}</b></Link><small>{companyExchangeSymbol(company)} · {company.type} dividend · {company.sourceExchange ?? "Synced feed"}</small><small>Record date: {company.recordDate || "Not announced"}</small></div>
+          <strong>{currency(company.dividend)}</strong>
+        </div>) : <div className="table-empty">{selectedDay ? "No upcoming dividend ex-dates on this day. Select another date." : autoDividendState.configured ? "No synchronized or imported upcoming dividend events for this month." : "No official dividend CSV events are saved for this month. Import the latest NSE/BSE corporate-actions CSV from the Developer area or connect an authorized feed."}</div>}</div>
+        {selectedDay && <button className="button button-secondary button-small calendar-clear-day" onClick={() => setSelectedDay(null)}>Show all events this month</button>}
+      </Panel>
+    </div></>;
 }
 
 function CompaniesPage({ screener = false }: { screener?: boolean }) {
