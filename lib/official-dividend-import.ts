@@ -122,14 +122,17 @@ function indiaDateKey(date: Date) {
   return `${value("year")}-${value("month")}-${value("day")}`;
 }
 
-function isWithinLastTwelveMonths(date: string, asOf: Date) {
+function isWithinImportWindow(date: string, asOf: Date) {
   if (!date) return false;
   const end = indiaDateKey(asOf);
   const [year, month, day] = end.split("-").map(Number);
   const startYear = year - 1;
   const startDay = Math.min(day, new Date(Date.UTC(startYear, month, 0)).getUTCDate());
+  const endYear = year + 1;
+  const endDay = Math.min(day, new Date(Date.UTC(endYear, month, 0)).getUTCDate());
   const startKey = `${startYear}-${String(month).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
-  return date >= startKey && date <= end;
+  const endKey = `${endYear}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+  return date >= startKey && date <= endKey;
 }
 
 export function parseOfficialDividendCsv(
@@ -170,7 +173,7 @@ export function parseOfficialDividendCsv(
     const exDate = dateValue(value(exDateIndex));
 
     if (!rawSymbol || !name || !/dividend/i.test(purpose) || /distribution|per\s+unit/i.test(purpose)
-      || (series && series.toUpperCase() !== "EQ") || !isWithinLastTwelveMonths(exDate, asOf)) {
+      || (series && series.toUpperCase() !== "EQ") || !isWithinImportWindow(exDate, asOf)) {
       skippedRows += 1;
       continue;
     }
@@ -199,11 +202,24 @@ export function parseOfficialDividendCsv(
 
     const previous = latestBySymbol.get(symbol);
     if (previous) duplicateRows += 1;
-    if (!previous || dateValue(previous.exDate) <= exDate) latestBySymbol.set(symbol, company);
+    if (!previous) {
+      latestBySymbol.set(symbol, company);
+    } else {
+      const previousDate = dateValue(previous.exDate);
+      const today = indiaDateKey(asOf);
+      const previousIsUpcoming = previousDate >= today;
+      const currentIsUpcoming = exDate >= today;
+      // Prefer the nearest upcoming event; if none exists, retain the most recent past event.
+      if ((currentIsUpcoming && !previousIsUpcoming)
+        || (currentIsUpcoming && previousIsUpcoming && exDate < previousDate)
+        || (!currentIsUpcoming && !previousIsUpcoming && exDate > previousDate)) {
+        latestBySymbol.set(symbol, company);
+      }
+    }
   }
 
   if (!latestBySymbol.size) {
-    throw new Error(`No dividend records within the last 12 months were found in this ${exchange} export.`);
+    throw new Error(`No dividend records within the import window (12 months past to 12 months future) were found in this ${exchange} export.`);
   }
 
   return { companies: [...latestBySymbol.values()], skippedRows, duplicateRows };

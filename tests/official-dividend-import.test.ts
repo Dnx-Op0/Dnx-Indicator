@@ -51,3 +51,27 @@ test("rejects CSVs that do not match the selected exchange export", () => {
     /does not match the official BSE/,
   );
 });
+
+
+test("keeps upcoming ex-dates and prefers the nearest upcoming event for a repeated symbol", () => {
+  const csv = [
+    "SYMBOL,COMPANY NAME,SERIES,PURPOSE,FACE VALUE,EX-DATE,RECORD DATE,BOOK CLOSURE START DATE,BOOK CLOSURE END DATE",
+    "PFC,Power Finance Corporation Limited,EQ,Interim Dividend - Rs 4 Per Share,10,17-Nov-2026,17-Nov-2026,-,-",
+    "PFC,Power Finance Corporation Limited,EQ,Interim Dividend - Rs 5 Per Share,10,05-Dec-2026,06-Dec-2026,-,-",
+    "PFC,Power Finance Corporation Limited,EQ,Final Dividend - Rs 6 Per Share,10,15-May-2026,16-May-2026,-,-",
+  ].join("\n");
+
+  const result = parseOfficialDividendCsv(csv, "NSE", new Date("2026-11-23T00:00:00.000Z"));
+  assert.equal(result.companies.length, 1);
+  assert.equal(result.duplicateRows, 2);
+  assert.equal(result.companies[0].exDate, "05 Dec 2026");
+  assert.equal(result.companies[0].dividend, 5);
+});
+
+test("does not include events more than twelve months in the future", () => {
+  const csv = [
+    "SYMBOL,COMPANY NAME,SERIES,PURPOSE,FACE VALUE,EX-DATE,RECORD DATE,BOOK CLOSURE START DATE,BOOK CLOSURE END DATE",
+    "PFC,Power Finance Corporation Limited,EQ,Interim Dividend - Rs 4 Per Share,10,17-Nov-2027,17-Nov-2027,-,-",
+  ].join("\n");
+  assert.throws(() => parseOfficialDividendCsv(csv, "NSE", asOf), /No dividend records within the import window/);
+});
