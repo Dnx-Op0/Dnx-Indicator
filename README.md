@@ -308,7 +308,7 @@ Required fields are `exchange`, `symbol`, `amountPerShare`, and `announcementDat
 
 **Important:** The adapter does not scrape undocumented exchange endpoints or bypass data licensing. Obtain the endpoint and usage rights from your selected exchange or licensed provider. Keep all provider credentials in server-side environment variables; never put them in browser code or commit them to GitHub.
 
-Until these variables and the PostgreSQL migration are configured, synchronization correctly reports `UNCONFIGURED`. The current public demo calendar remains separate from the PostgreSQL ingestion store; it must be connected to a reviewed publication workflow before database-imported records appear in the public calendar.
+Until these variables and the PostgreSQL migration are configured, synchronization correctly reports `UNCONFIGURED`. The public read-only endpoint at `/api/dividends/upcoming` publishes future-dated records from the PostgreSQL sync store to the dashboard, dividend calendar, and corporate-actions page. It excludes cancelled and unverified records, keeps manual entries in their separate manual-dividends area, and returns the last successful sync time. The dashboard checks this endpoint on page load, when the browser regains focus, and every five minutes; the server-side scheduled sync still runs once daily at 16:00 IST. When the feed or database is not configured, the UI explicitly labels the fallback records as demo/CSV data rather than claiming automatic updates.
 
 ---
 
