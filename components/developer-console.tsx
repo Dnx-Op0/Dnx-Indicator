@@ -418,8 +418,8 @@ export default function DeveloperConsole({ view }: { view: DeveloperView }) {
               {importBusy && <div className="developer-empty">Reading and validating CSV…</div>}
               {importPreview && <div className="developer-import-preview">
                 <b>{importFileName}</b>
-                <span>{importPreview.companies.length} unique {importExchange} listings ready · {importPreview.duplicateRows} repeated symbols collapsed · {importPreview.skippedRows} other rows skipped.</span>
-                <ul>{importPreview.companies.slice(0, 5).map((company) => <li key={company.symbol}>{company.name} · {company.exchangeSymbol} · {company.exDate} · {company.dividend === null ? "Amount unavailable" : `₹${company.dividend.toFixed(2)} / share`}</li>)}</ul>
+                <span>{importPreview.companies.length} unique {importExchange} listings · {importPreview.companies.reduce((total, company) => total + (company.calendarEvents?.length ?? 1), 0)} dividend events retained · {importPreview.duplicateRows} repeated-symbol rows preserved · {importPreview.skippedRows} other rows skipped.</span>
+                <ul>{importPreview.companies.slice(0, 5).map((company) => <li key={company.symbol}>{company.name} · {company.exchangeSymbol} · {company.calendarEvents?.length ?? 1} event(s) · next ex-date {company.exDate} · {company.dividend === null ? "Amount unavailable" : `₹${company.dividend.toFixed(2)} / share`}</li>)}</ul>
                 {importPreview.companies.length > 5 && <small>Showing 5 of {importPreview.companies.length} preview records.</small>}
                 <div className="developer-edit-actions"><button className="button button-secondary" type="button" onClick={() => { setImportPreview(null); setImportFileName(""); }}>Cancel</button><button className="button button-primary" type="button" disabled={!storage?.editable || busy} onClick={() => void publishOfficialImport()}>{busy ? "Publishing…" : "Import and publish"} <Check size={14} /></button></div>
               </div>}
