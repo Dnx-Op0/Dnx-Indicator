@@ -763,3 +763,15 @@ select option { color: var(--text); background: var(--panel); }
 .dnx-feed-footer span:first-child { display: inline-flex; align-items: center; gap: 5px; }
 @media (max-width: 760px) { .dnx-quote-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 420px) { .dnx-quote-grid { grid-template-columns: 1fr; } }
+
+
+/* Separate client-visible manual dividend compartment */
+.owner-manual-toggle { grid-column: 1 / -1; display: flex !important; align-items: flex-start; gap: 11px; padding: 13px 14px; border: 1px solid var(--border, rgba(128,128,128,.25)); border-radius: 10px; background: var(--surface-soft, rgba(128,128,128,.04)); cursor: pointer; }
+.owner-manual-toggle input { width: 16px; height: 16px; margin-top: 2px; accent-color: var(--accent, #4f9b78); }
+.owner-manual-toggle span { display: grid; gap: 4px; }
+.owner-manual-toggle b { font-size: 12px; }
+.owner-manual-toggle small { color: var(--muted, #888); font-size: 11px; line-height: 1.5; }
+.owner-source-field { grid-column: 1 / -1; }
+.manual-empty { display: grid; gap: 8px; padding: 34px 18px; text-align: center; }
+.manual-empty b { color: var(--foreground, inherit); }
+.manual-empty span { max-width: 560px; margin: 0 auto; color: var(--muted, #888); font-size: 12px; line-height: 1.6; }
