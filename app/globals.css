@@ -740,3 +740,26 @@ select option { color: var(--text); background: var(--panel); }
   .owner-company-metrics { flex: 1; margin-left: 34px; }
   .owner-edit-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+
+/* Live market quote panel */
+.dnx-live-quotes { margin-top: 22px; }
+.dnx-live-actions { display: flex; align-items: center; gap: 10px; }
+.dnx-feed-badge { display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 6px 10px; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+.dnx-feed-badge > span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.dnx-feed-badge.is-live { color: #18864b; background: rgba(34, 197, 94, .12); }
+.dnx-feed-badge.is-delayed { color: #a66b12; background: rgba(234, 179, 8, .14); }
+.dnx-feed-message { display: flex; align-items: flex-start; gap: 9px; padding: 14px; border: 1px dashed var(--border, rgba(128,128,128,.3)); border-radius: 10px; color: var(--muted, #888); font-size: 12px; line-height: 1.6; }
+.dnx-feed-message svg { flex: 0 0 auto; margin-top: 1px; }
+.dnx-quote-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.dnx-quote-card { min-width: 0; padding: 13px; border: 1px solid var(--border, rgba(128,128,128,.2)); border-radius: 10px; background: var(--surface-soft, rgba(128,128,128,.035)); }
+.dnx-quote-heading { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; }
+.dnx-quote-heading span { color: var(--muted, #888); font-size: 10px; }
+.dnx-quote-name { overflow: hidden; margin: 5px 0 10px; color: var(--muted, #888); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.dnx-quote-card strong { display: block; margin-bottom: 5px; font-size: 20px; font-variant-numeric: tabular-nums; }
+.dnx-quote-card .positive, .dnx-quote-card .negative { font-size: 11px; font-weight: 650; }
+.dnx-quote-card small { display: block; margin-top: 9px; color: var(--muted, #888); font-size: 9px; }
+.dnx-feed-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 12px; color: var(--muted, #888); font-size: 10px; }
+.dnx-feed-footer span:first-child { display: inline-flex; align-items: center; gap: 5px; }
+@media (max-width: 760px) { .dnx-quote-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 420px) { .dnx-quote-grid { grid-template-columns: 1fr; } }
