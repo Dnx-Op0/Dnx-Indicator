@@ -1,3 +1,20 @@
+export type DividendCalendarEvent = {
+  eventId: string;
+  name: string;
+  symbol: string;
+  exchangeSymbol: string;
+  sourceExchange: "NSE" | "BSE";
+  sourceUpdatedAt: string;
+  sourceUrl: string;
+  sourceDescription: string;
+  dividend: number | null;
+  type: "Interim" | "Final" | "Special" | "Dividend";
+  announcement: string;
+  exDate: string;
+  recordDate: string;
+  paymentDate: string;
+};
+
 export type DividendCompany = {
   name: string;
   symbol: string;
