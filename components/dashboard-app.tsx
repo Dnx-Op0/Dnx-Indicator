@@ -655,10 +655,23 @@ function ManualDividendsPage() {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("All types");
   const [sortBy, setSortBy] = useState<"updated" | "exDate" | "dividend">("updated");
+  const [dateStatus, setDateStatus] = useState("All dates");
+  const [sourceStatus, setSourceStatus] = useState("All sources");
   const manualRows = useMemo(() => availableCompanies.filter((company) => company.manualUpdateAt), [availableCompanies]);
   const rows = useMemo(() => manualRows
-    .filter((company) => `${company.name} ${company.symbol} ${company.exchangeSymbol ?? ""}`.toLowerCase().includes(query.toLowerCase())
-      && (type === "All types" || company.type === type))
+    .filter((company) => {
+      const matchesQuery = `${company.name} ${company.symbol} ${company.exchangeSymbol ?? ""}`.toLowerCase().includes(query.toLowerCase());
+      const matchesType = type === "All types" || company.type === type;
+      const daysToExDate = dayOffsetFromToday(company.exDate, todayKey);
+      const matchesDate = dateStatus === "All dates"
+        || (dateStatus === "Upcoming" && daysToExDate !== null && daysToExDate >= 0)
+        || (dateStatus === "Past" && daysToExDate !== null && daysToExDate < 0);
+      const hasSource = Boolean(company.manualSourceUrl?.trim());
+      const matchesSource = sourceStatus === "All sources"
+        || (sourceStatus === "Source provided" && hasSource)
+        || (sourceStatus === "No source link" && !hasSource);
+      return matchesQuery && matchesType && matchesDate && matchesSource;
+    })
     .sort((a, b) => {
       if (sortBy === "dividend") return (b.dividend ?? -1) - (a.dividend ?? -1);
       if (sortBy === "exDate") return (parseDemoDate(b.exDate)?.getTime() ?? 0) - (parseDemoDate(a.exDate)?.getTime() ?? 0);
@@ -687,8 +700,10 @@ function ManualDividendsPage() {
       {manualRows.length ? <>
         <div className="dividend-table-tools"><label className="filter-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search company or symbol" /></label>
           <label>Type<select value={type} onChange={(event) => setType(event.target.value)}>{["All types", "Interim", "Final", "Special", "Dividend"].map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label>Ex-date<select value={dateStatus} onChange={(event) => setDateStatus(event.target.value)}><option>All dates</option><option>Upcoming</option><option>Past</option></select></label>
+          <label>Source<select value={sourceStatus} onChange={(event) => setSourceStatus(event.target.value)}><option>All sources</option><option>Source provided</option><option>No source link</option></select></label>
           <label>Sort by<select value={sortBy} onChange={(event) => setSortBy(event.target.value as "updated" | "exDate" | "dividend")}><option value="updated">Recently updated</option><option value="exDate">Ex-date</option><option value="dividend">Dividend amount</option></select></label></div>
-        <div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Dividend / share</th><th>Type</th><th>Announced</th><th>Ex-date</th><th>Record date</th><th>Payment date</th><th>Updated</th><th>Source</th></tr></thead><tbody>{rows.map((company) => <tr key={company.symbol}>
+        <div className="table-scroll"><table className="data-table"><thead><tr><th>Company</th><th>Dividend / share</th><th>Type</th><th>Announced</th><th>Ex-date</th><th>Record date</th><th>Payment date</th><th>Updated</th><th>Source</th><th>Ex-date status</th></tr></thead><tbody>{rows.map((company) => <tr key={company.symbol}>
           <td><Link className="company-cell" href={`/company-analysis/${company.symbol}`}><span className="company-logo">{company.symbol.slice(0, 2)}</span><b>{company.name}</b></Link><ManualUpdateBadge /></td>
           <td className="amount-cell">{currency(company.dividend)}</td>
           <td><span className={`type-pill ${company.type.toLowerCase()}`}>{company.type}</span></td>
@@ -697,7 +712,8 @@ function ManualDividendsPage() {
           <td>{company.recordDate || "—"}</td>
           <td>{company.paymentDate || "—"}</td>
           <td>{company.manualUpdateAt ? formatManualUpdateDate(company.manualUpdateAt) : "—"}</td>
-          <td>{company.manualSourceUrl?.trim() ? <a className="panel-link" href={company.manualSourceUrl} target="_blank" rel="noopener noreferrer">View source <ArrowUpRight size={12} /></a> : "—"}</td>
+          <td>{company.manualSourceUrl?.trim() ? <a className="panel-link" href={company.manualSourceUrl} target="_blank" rel="noopener noreferrer">View source <ArrowUpRight size={12} /></a> : <span className="muted-text">Not provided</span>}</td>
+          <td>{(() => { const days = dayOffsetFromToday(company.exDate, todayKey); return days === null ? <span className="muted-text">Date unavailable</span> : days < 0 ? <span className="muted-text">Past</span> : days === 0 ? <span className="type-pill interim">Today</span> : <span className="type-pill final">In {days} days</span>; })()}</td>
         </tr>)}</tbody></table>{!rows.length && <div className="table-empty">No manual entries match your filters.</div>}</div>
       </> : <div className="empty-state"><Pencil size={20} /><b>No manual updates yet</b><span>Dividend entries added from the developer console will appear here.</span></div>}
     </Panel>
