@@ -519,9 +519,12 @@ function CalendarPage() {
 
   // Never show bundled demo rows as real upcoming dividends. The calendar uses
   // synchronized records plus official NSE/BSE CSV imports only.
-  const officialCsvEvents = availableCompanies.filter((company) =>
-    Boolean(company.sourceExchange && company.sourceUpdatedAt && !company.manualUpdateAt)
-  );
+  const officialCsvEvents = availableCompanies.flatMap((company) => {
+    if (!company.sourceExchange || !company.sourceUpdatedAt || company.manualUpdateAt) return [];
+    return company.calendarEvents?.length
+      ? company.calendarEvents.map((event) => ({ ...company, ...event }))
+      : [company];
+  });
   const combinedEvents = [...autoDividendState.events, ...officialCsvEvents];
   const seenEvents = new Set<string>();
   const calendarCompanies = combinedEvents.filter((company) => {
