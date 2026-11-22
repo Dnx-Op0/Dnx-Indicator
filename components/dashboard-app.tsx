@@ -526,7 +526,8 @@ function CalendarPage() {
   const seenEvents = new Set<string>();
   const calendarCompanies = combinedEvents.filter((company) => {
     const exchange = company.sourceExchange ?? company.exchangeSymbol?.split(":")[0] ?? "NSE";
-    const key = [exchange, company.symbol, company.exDate, company.dividend ?? ""].join("|").toUpperCase();
+    const normalizedSymbol = (company.exchangeSymbol ?? company.symbol).replace(/^(NSE:|BSE:)/i, "");
+    const key = [exchange, normalizedSymbol, company.exDate, company.dividend ?? ""].join("|").toUpperCase();
     if (seenEvents.has(key)) return false;
     seenEvents.add(key);
     return true;
