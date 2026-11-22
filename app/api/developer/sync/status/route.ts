@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   if (!process.env.DATABASE_URL) {
     return Response.json({
       databaseConfigured: false,
-      sourceConfigured: false,
+      sourceConfigured: Boolean(process.env.DNX_DIVIDEND_FEED_URL),
       nextScheduledAt: getNextScheduledSync().toISOString(),
       monitoredCompanies: null,
       lastSuccessfulAt: null,
