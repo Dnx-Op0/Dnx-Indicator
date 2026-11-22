@@ -1,5 +1,6 @@
 "use client";
 
+import MarketLiveQuotes from "@/components/market-live-quotes";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
@@ -385,6 +386,7 @@ function Dashboard({ profile }: { profile: Profile }) {
     <div className="demo-banner"><span className="demo-alert-icon"><ShieldCheck size={16} /></span><div><b>Illustrative dashboard</b><span> Market prices and historical charts are sample data. Dividend records may be source-labelled exchange CSV imports or unverified manual entries; check the company page for details.</span></div><DemoTag /></div>
     <div className="section-title-row"><div><h2>Market overview</h2><p>Indian indices at a glance</p></div><div className="market-status"><span />Indicative session <b>{marketIsOpen ? "Open" : "Closed"}</b><span className="divider">·</span><span className="market-time">Weekdays 09:15–15:30 IST · DEMO</span></div></div>
     <div className="market-grid">{marketIndices.map((index) => <MarketCard key={index.name} index={index} />)}</div>
+    <MarketLiveQuotes />
     <div className="section-title-row stats-title"><div><h2>Dividend snapshot</h2><p>Upcoming opportunities in your watchlist universe</p></div><Link className="text-link" href="/dividend-screener">View screener <ArrowUpRight size={14} /></Link></div>
     <div className="metric-grid">
       <MetricCard label="Upcoming dividends" value={String(upcomingCount).padStart(2, "0")} note="Next 30 days · based on available dates" icon={CalendarDays} tone="green" />
