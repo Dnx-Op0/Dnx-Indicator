@@ -78,6 +78,7 @@ export async function GET() {
         name: row.company.name,
         symbol,
         exchange,
+        sourceExchange: exchange,
         exchangeSymbol: symbol,
         sector: row.company.sector ?? "Other",
         marketCap: null,
